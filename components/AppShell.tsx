@@ -1,0 +1,91 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
+import type { Route } from "next";
+import { useGym } from "@/lib/store";
+import { useTheme } from "@/lib/theme";
+import Modals from "./Modals";
+
+const NAV: { href: Route; label: string }[] = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/socios", label: "Socios" },
+  { href: "/checkin", label: "Check-in" },
+  { href: "/asistencias", label: "Asistencias" },
+  { href: "/planes", label: "Planes" },
+  { href: "/reportes", label: "Reportes" },
+  { href: "/configuracion", label: "Configuración" },
+];
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  const { authed, hydrated, logout, settings } = useGym();
+  const { theme, toggle } = useTheme();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Client-side auth guard (mock): bounce to login when not authenticated.
+  useEffect(() => {
+    if (hydrated && !authed) router.replace("/login");
+  }, [hydrated, authed, router]);
+
+  if (!hydrated || !authed) return null;
+
+  function doLogout() {
+    logout();
+    router.replace("/login");
+  }
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", alignItems: "stretch" }}>
+      {/* Sidebar */}
+      <div style={{ width: 232, flex: "none", background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", padding: "20px 14px", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 10px 20px" }}>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+            <div style={{ width: 11, height: 11, borderRadius: 3, background: "#fff" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.1 }}>GymControl</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>{settings.name}</div>
+          </div>
+        </div>
+
+        {NAV.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
+                fontSize: 14, fontWeight: active ? 700 : 600, textDecoration: "none",
+                background: active ? "var(--primary-soft)" : "transparent",
+                color: active ? "var(--primary)" : "var(--text-muted)",
+              }}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: active ? "var(--primary)" : "var(--border)", flex: "none" }} />
+              <div>{item.label}</div>
+            </Link>
+          );
+        })}
+
+        <div style={{ flex: 1 }} />
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 10, borderRadius: 10, background: "var(--surface-alt)", marginBottom: 6 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Modo oscuro</div>
+          <div onClick={toggle} style={{ width: 38, height: 22, borderRadius: 20, background: theme === "dark" ? "var(--primary)" : "var(--border)", position: "relative", cursor: "pointer", flex: "none" }}>
+            <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: theme === "dark" ? 18 : 2, transition: "left 0.15s" }} />
+          </div>
+        </div>
+        <div onClick={doLogout} style={{ padding: 10, borderRadius: 10, fontSize: 13, fontWeight: 600, color: "var(--text-muted)", cursor: "pointer" }}>
+          Cerrar sesión
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0, padding: "28px 32px 60px", maxWidth: 1180 }}>{children}</div>
+
+      <Modals />
+    </div>
+  );
+}
