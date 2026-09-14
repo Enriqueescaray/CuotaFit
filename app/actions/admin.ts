@@ -109,6 +109,48 @@ function genPassword(): string {
   return s + "7!";
 }
 
+// Crea un gimnasio + su usuario dueño desde el panel de admin (con credenciales que controla el admin).
+export async function createGymAsAdmin(input: {
+  gymName: string;
+  ownerEmail: string;
+  password?: string;
+}): Promise<{ error?: string; email?: string; password?: string }> {
+  const adminEmail = await requireAdminEmail();
+  if (!adminEmail) return { error: "No autorizado" };
+
+  const gymName = (input.gymName ?? "").trim();
+  const email = (input.ownerEmail ?? "").trim().toLowerCase();
+  if (!gymName || !email) return { error: "Completá el nombre del gimnasio y el email del dueño." };
+  const password = input.password && input.password.length >= 8 ? input.password : genPassword();
+
+  const admin = createAdminClient();
+  const { data: created, error: cErr } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  if (cErr || !created?.user) {
+    const already = cErr?.message?.toLowerCase().includes("already") || cErr?.message?.toLowerCase().includes("registered");
+    return { error: already ? "Ese email ya está registrado." : "No se pudo crear el usuario." };
+  }
+  const userId = created.user.id;
+
+  const { data: gym, error: gErr } = await admin.from("gyms").insert({ name: gymName }).select("id").single();
+  if (gErr || !gym) {
+    await admin.auth.admin.deleteUser(userId);
+    return { error: "No se pudo crear el gimnasio." };
+  }
+
+  const { error: pErr } = await admin.from("profiles").insert({ id: userId, gym_id: gym.id, role: "owner", name: gymName });
+  if (pErr) {
+    await admin.auth.admin.deleteUser(userId);
+    return { error: "No se pudo vincular el perfil." };
+  }
+
+  await admin.from("plans").insert([
+    { gym_id: gym.id, type: "tiempo", name: "Mensual", duration_months: 1, price: 600 },
+    { gym_id: gym.id, type: "pases", name: "Pack 10 clases", pass_count: 10, validity_days: 30, price: 850 },
+  ]);
+
+  return { email, password };
+}
+
 // Restablece la contraseña del dueño de un gimnasio y devuelve la nueva (para que el admin la controle).
 export async function resetGymOwnerPassword(gymId: string): Promise<{ password?: string; email?: string; error?: string }> {
   const email = await requireAdminEmail();

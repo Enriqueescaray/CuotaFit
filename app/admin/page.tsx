@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AdminData, getAdminData, resetGymOwnerPassword, setGymSubscription, SubscriptionStatus } from "@/app/actions/admin";
+import { AdminData, createGymAsAdmin, getAdminData, resetGymOwnerPassword, setGymSubscription, SubscriptionStatus } from "@/app/actions/admin";
 import { useGym } from "@/lib/store";
 import { LogoMark, Wordmark } from "@/components/Logo";
 
@@ -36,6 +36,10 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [newPw, setNewPw] = useState<Record<string, string>>({});
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ gymName: "", ownerEmail: "", password: "" });
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createResult, setCreateResult] = useState<{ email: string; password: string } | null>(null);
 
   const refresh = useCallback(async () => {
     setData(await getAdminData());
@@ -70,6 +74,20 @@ export default function AdminPage() {
     const res = await resetGymOwnerPassword(gymId);
     if (res.password) setNewPw((p) => ({ ...p, [gymId]: res.password! }));
     setBusy(false);
+  }
+
+  async function createGym() {
+    setCreateError(null);
+    setBusy(true);
+    const res = await createGymAsAdmin(createForm);
+    setBusy(false);
+    if (res.error) {
+      setCreateError(res.error);
+      return;
+    }
+    setCreateResult({ email: res.email!, password: res.password! });
+    setCreateForm({ gymName: "", ownerEmail: "", password: "" });
+    await refresh();
   }
 
   // --- Loading ---
@@ -143,6 +161,45 @@ export default function AdminPage() {
           <KpiCard label="Pagando (activos)" value={String(activos)} color="var(--green)" />
           <KpiCard label="Suspendidos" value={String(suspendidos)} color={suspendidos ? "var(--red)" : undefined} />
         </div>
+
+        {/* Crear gimnasio */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <button onClick={() => { setShowCreate((s) => !s); setCreateError(null); }} style={{ background: showCreate ? "var(--surface)" : "var(--primary)", color: showCreate ? "var(--text)" : "#fff", border: showCreate ? "1px solid var(--border)" : "none", borderRadius: 10, padding: "10px 16px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+            {showCreate ? "Cancelar" : "+ Crear gimnasio"}
+          </button>
+        </div>
+
+        {showCreate && (
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 14 }}>Nuevo gimnasio</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Nombre del gimnasio</div>
+                <input value={createForm.gymName} onChange={(e) => setCreateForm((f) => ({ ...f, gymName: e.target.value }))} placeholder="Ej. PowerFit" style={inputStyle} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Email del dueño</div>
+                <input value={createForm.ownerEmail} onChange={(e) => setCreateForm((f) => ({ ...f, ownerEmail: e.target.value }))} placeholder="correo@mail.com" style={inputStyle} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Contraseña (opcional)</div>
+                <input value={createForm.password} onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))} placeholder="En blanco = se genera" style={inputStyle} />
+              </div>
+            </div>
+            {createError && <div style={{ fontSize: 13, color: "var(--red)", background: "var(--red-soft)", borderRadius: 8, padding: "8px 12px", marginTop: 12 }}>{createError}</div>}
+            <div style={{ marginTop: 14 }}>
+              <button onClick={createGym} disabled={busy} style={{ background: "var(--primary)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer", opacity: busy ? 0.7 : 1 }}>Crear gimnasio</button>
+            </div>
+          </div>
+        )}
+
+        {createResult && (
+          <div style={{ background: "var(--green-soft)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--green)", marginBottom: 6 }}>Gimnasio creado</div>
+            <div style={{ fontSize: 13, color: "var(--text)" }}>Credenciales (copialas y pasáselas al gimnasio; la contraseña no se vuelve a mostrar):</div>
+            <div style={{ fontFamily: "monospace", fontSize: 13, marginTop: 6 }}>Email: <b>{createResult.email}</b><br />Contraseña: <b>{createResult.password}</b></div>
+          </div>
+        )}
 
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 8 }}>
           {gyms.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)", fontSize: 14 }}>Todavía no hay gimnasios registrados.</div>}
