@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/* ===== GymControl design tokens (ported from Claude Design handoff) ===== */
+:root {
+  /* Light palette */
+  --bg: #F5F6FA;
+  --surface: #FFFFFF;
+  --surface-alt: #F0F2F7;
+  --border: #E3E6EE;
+  --text: #101728;
+  --text-muted: #66707F;
+  --text-faint: #98A1AF;
+  --primary-soft: #E9F0FF;
+  --green-soft: #E4F5EA;
+  --amber-soft: #FCEFDD;
+  --red-soft: #FBE7E7;
+
+  /* Fixed accents (same in both themes) */
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
+  --green: #15803D;
+  --amber: #B45309;
+  --red: #DC2626;
+}
+
+[data-theme="dark"] {
+  --bg: #0D111C;
+  --surface: #161B29;
+  --surface-alt: #1D2333;
+  --border: #2A3145;
+  --text: #EEF0F6;
+  --text-muted: #9AA3B8;
+  --text-faint: #6C7690;
+  --primary-soft: #182B52;
+  --green-soft: #123321;
+  --amber-soft: #3A2A10;
+  --red-soft: #3A1616;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-primary: var(--primary);
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-jakarta), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+input,
+select,
+button {
+  font-family: inherit;
+}
+
+input::placeholder {
+  color: var(--text-faint);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+}
