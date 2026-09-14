@@ -38,11 +38,15 @@ export interface Member {
   payments: Payment[];
 }
 
+export type SubscriptionStatus = "trial" | "active" | "suspended";
+
 export interface GymSettings {
   name: string;
   currency: string; // ISO 4217 code, e.g. "MXN"
   locale: string; // e.g. "es-MX"
   blockExpired: boolean; // block entry for expired / no-pass members
+  subscriptionStatus: SubscriptionStatus; // estado de la suscripción SaaS del gimnasio
+  paidUntil?: string | null; // ISO, hasta cuándo está pago
 }
 
 export interface MemberStatus {
@@ -69,6 +73,8 @@ export const DEFAULT_SETTINGS: GymSettings = {
   currency: "MXN",
   locale: "es-MX",
   blockExpired: true,
+  subscriptionStatus: "active", // por defecto no bloquea (hasta que el panel lo cambie)
+  paidUntil: null,
 };
 
 export const CURRENCY_OPTIONS: { code: string; locale: string; label: string }[] = [

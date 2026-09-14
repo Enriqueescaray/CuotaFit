@@ -58,6 +58,17 @@ export default function CheckinPage() {
 
   const bg = result ? BG_BY_LEVEL[result.level] : "#2563EB";
 
+  if (hydrated && authed && settings.subscriptionStatus === "suspended") {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0F1729", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ textAlign: "center", color: "#fff", maxWidth: 420 }}>
+          <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 10 }}>Cuenta suspendida</div>
+          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", lineHeight: 1.5 }}>El check-in está pausado por un pago pendiente de la suscripción.</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: bg, display: "flex", flexDirection: "column", transition: "background 0.2s" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 28px" }}>

@@ -37,6 +37,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
+  // Suscripción SaaS suspendida: se bloquea el acceso hasta regularizar el pago.
+  if (settings.subscriptionStatus === "suspended") {
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ maxWidth: 420, textAlign: "center", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 36 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>Cuenta suspendida</div>
+          <div style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 20 }}>
+            El acceso a {settings.name} está pausado por un pago pendiente de la suscripción. Regularizá el pago para reactivar la cuenta.
+          </div>
+          <button onClick={doLogout} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Cerrar sesión</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "stretch" }}>
       {/* Sidebar */}

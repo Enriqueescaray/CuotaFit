@@ -52,7 +52,7 @@ export interface PlanFormInput {
 }
 
 // --- DB row shapes ---
-interface GymRow { id: string; name: string; currency: string; locale: string; block_expired: boolean }
+interface GymRow { id: string; name: string; currency: string; locale: string; block_expired: boolean; subscription_status?: "trial" | "active" | "suspended"; paid_until?: string | null }
 interface PlanRow { id: string; type: PlanType; name: string; duration_months: number | null; pass_count: number | null; validity_days: number | null; price: number }
 interface MemberRow { id: string; name: string; email: string | null; phone: string | null; pin: string; plan_type: PlanType | null; plan_name: string | null; due_date: string | null; passes_total: number | null; passes_left: number | null }
 interface PaymentRow { id: string; member_id: string; amount: number; method: PaymentMethod; plan_name: string | null; paid_at: string }
@@ -144,7 +144,14 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
 
     if (gym) {
       const g = gym as GymRow;
-      setSettings({ name: g.name, currency: g.currency, locale: g.locale, blockExpired: g.block_expired });
+      setSettings({
+        name: g.name,
+        currency: g.currency,
+        locale: g.locale,
+        blockExpired: g.block_expired,
+        subscriptionStatus: g.subscription_status ?? "active",
+        paidUntil: g.paid_until ?? null,
+      });
     }
     setPlans(((planRows as PlanRow[]) ?? []).map(mapPlan));
 

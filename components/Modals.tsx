@@ -132,7 +132,7 @@ function PaymentForm({ memberId }: { memberId: string }) {
         <div>
           <div style={{ ...labelStyle, marginBottom: 8 }}>Método de pago</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["Efectivo", "Transferencia", "Tarjeta"] as PaymentMethod[]).map((pm) => {
+            {(["Efectivo", "Transferencia"] as PaymentMethod[]).map((pm) => {
               const on = method === pm;
               return (
                 <div key={pm} onClick={() => setMethod(pm)} style={{ flex: 1, textAlign: "center", padding: 10, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", border: `1px solid ${on ? "var(--primary)" : "var(--border)"}`, background: on ? "var(--primary-soft)" : "var(--surface)", color: on ? "var(--primary)" : "var(--text)" }}>
