@@ -9,15 +9,17 @@ import { LogoGlyph } from "@/components/Logo";
 const BG_BY_LEVEL: Record<string, string> = { green: "#15803D", amber: "#B45309", red: "#B91C1C" };
 
 export default function CheckinPage() {
-  const { authed, hydrated, settings, checkin } = useGym();
+  const { authed, hydrated, settings, checkin, online, pendingCount } = useGym();
   const router = useRouter();
   const [pin, setPin] = useState("");
   const [result, setResult] = useState<CheckinResult | null>(null);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (hydrated && !authed) router.replace("/login");
-  }, [hydrated, authed, router]);
+    // Offline no se puede iniciar sesión: el kiosco funciona con el snapshot local,
+    // así que solo redirigimos al login si hay conexión y no hay sesión.
+    if (hydrated && !authed && online) router.replace("/login");
+  }, [hydrated, authed, online, router]);
 
   const reset = useCallback(() => {
     setPin("");
@@ -58,7 +60,7 @@ export default function CheckinPage() {
 
   const bg = result ? BG_BY_LEVEL[result.level] : "#2563EB";
 
-  if (hydrated && authed && settings.subscriptionStatus === "suspended") {
+  if (hydrated && settings.subscriptionStatus === "suspended") {
     return (
       <div style={{ minHeight: "100vh", background: "#0F1729", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <div style={{ textAlign: "center", color: "#fff", maxWidth: 420 }}>
@@ -76,7 +78,18 @@ export default function CheckinPage() {
           <LogoGlyph size={28} color="#fff" />
           <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>{settings.name} · Check-in</div>
         </div>
-        <div onClick={() => router.push("/dashboard")} style={{ fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: 0.85 }}>Salir</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          {(!online || pendingCount > 0) && (
+            <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.16)", borderRadius: 20, padding: "5px 12px" }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: online ? "#A3E635" : "#F59E0B" }} />
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>
+                {online ? "Sincronizando…" : "Sin conexión"}
+                {pendingCount > 0 ? ` · ${pendingCount} pendiente${pendingCount === 1 ? "" : "s"}` : ""}
+              </div>
+            </div>
+          )}
+          <div onClick={() => router.push("/dashboard")} style={{ fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: 0.85 }}>Salir</div>
+        </div>
       </div>
 
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>

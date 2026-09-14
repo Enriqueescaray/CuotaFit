@@ -18,6 +18,7 @@ import {
   statusOf,
   toISO,
 } from "./data";
+import { enqueue, getQueue, loadSnapshot, saveSnapshot, setQueue } from "./offline";
 
 export type ModalState =
   | { type: "addMember" }
@@ -66,6 +67,8 @@ interface GymCtx {
   settings: GymSettings;
   search: string;
   modal: ModalState;
+  online: boolean;
+  pendingCount: number;
 
   login: (email: string, password: string) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
@@ -115,6 +118,8 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<ModalState>(null);
+  const [online, setOnline] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const clearData = useCallback(() => {
     setGymId(null);
@@ -142,18 +147,21 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         supabase.from("checkins").select("member_id, checked_at, result").gte("checked_at", `${MONTH_PREFIX}-01`),
       ]);
 
-    if (gym) {
-      const g = gym as GymRow;
-      setSettings({
-        name: g.name,
-        currency: g.currency,
-        locale: g.locale,
-        blockExpired: g.block_expired,
-        subscriptionStatus: g.subscription_status ?? "active",
-        paidUntil: g.paid_until ?? null,
-      });
-    }
-    setPlans(((planRows as PlanRow[]) ?? []).map(mapPlan));
+    const g = gym as GymRow | null;
+    const settingsObj: GymSettings = g
+      ? {
+          name: g.name,
+          currency: g.currency,
+          locale: g.locale,
+          blockExpired: g.block_expired,
+          subscriptionStatus: g.subscription_status ?? "active",
+          paidUntil: g.paid_until ?? null,
+        }
+      : DEFAULT_SETTINGS;
+    setSettings(settingsObj);
+
+    const plansMapped = ((planRows as PlanRow[]) ?? []).map(mapPlan);
+    setPlans(plansMapped);
 
     // Group payments and attendance days per member.
     const paymentsByMember = new Map<string, { date: string; amount: number; method: PaymentMethod; plan: string }[]>();
@@ -172,32 +180,75 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       daysByMember.set(c.member_id, list);
     }
 
-    setMembers(
-      ((memberRows as MemberRow[]) ?? []).map((r) => ({
-        id: r.id,
-        name: r.name,
-        email: r.email ?? "",
-        phone: r.phone ?? "",
-        pin: r.pin,
-        planType: (r.plan_type ?? "tiempo") as PlanType,
-        planName: r.plan_name ?? "",
-        dueDate: r.due_date ?? undefined,
-        passesTotal: r.passes_total ?? undefined,
-        passesLeft: r.passes_left ?? undefined,
-        attendanceDays: daysByMember.get(r.id) ?? [],
-        payments: paymentsByMember.get(r.id) ?? [],
-      })),
-    );
+    const membersMapped: Member[] = ((memberRows as MemberRow[]) ?? []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      email: r.email ?? "",
+      phone: r.phone ?? "",
+      pin: r.pin,
+      planType: (r.plan_type ?? "tiempo") as PlanType,
+      planName: r.plan_name ?? "",
+      dueDate: r.due_date ?? undefined,
+      passesTotal: r.passes_total ?? undefined,
+      passesLeft: r.passes_left ?? undefined,
+      attendanceDays: daysByMember.get(r.id) ?? [],
+      payments: paymentsByMember.get(r.id) ?? [],
+    }));
+    setMembers(membersMapped);
+
+    // Guardar snapshot local para que el check-in funcione sin internet.
+    saveSnapshot({ gymId: gid, settings: settingsObj, members: membersMapped, plans: plansMapped, savedAt: new Date().toISOString() });
   }, [supabase, clearData]);
 
-  // Initial session check + auth subscription.
+  // Cargar desde el snapshot local (sin internet).
+  const loadFromSnapshot = useCallback(() => {
+    const snap = loadSnapshot();
+    if (snap) {
+      setGymId(snap.gymId);
+      setSettings(snap.settings);
+      setMembers(snap.members);
+      setPlans(snap.plans);
+    }
+    setPendingCount(getQueue().length);
+  }, []);
+
+  // Sincronizar los check-ins que quedaron encolados sin internet.
+  const syncQueue = useCallback(async () => {
+    const q = getQueue();
+    if (q.length === 0) return;
+    const remaining: typeof q = [];
+    for (const item of q) {
+      try {
+        await supabase.from("checkins").insert({ gym_id: item.gymId, member_id: item.memberId, checked_at: item.checkedAt, result: "permitido", pass_consumed: item.passConsumed });
+        if (item.passConsumed) {
+          const { data } = await supabase.from("members").select("passes_left").eq("id", item.memberId).single();
+          const left = (data as { passes_left: number | null } | null)?.passes_left ?? null;
+          if (left !== null) await supabase.from("members").update({ passes_left: Math.max(0, left - 1) }).eq("id", item.memberId);
+        }
+      } catch {
+        remaining.push(item); // sigue pendiente para el próximo intento
+      }
+    }
+    setQueue(remaining);
+    setPendingCount(remaining.length);
+  }, [supabase]);
+
+  // Initial session check + auth subscription (offline-aware).
   useEffect(() => {
     let active = true;
+    setPendingCount(getQueue().length);
     supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       const u = data.session?.user ?? null;
       setUser(u);
-      if (u) await loadAll();
+      const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
+      if (isOnline && u) {
+        await syncQueue();
+        await loadAll();
+      } else if (!isOnline) {
+        // Offline: usar el snapshot local aunque la sesión no se pueda validar.
+        loadFromSnapshot();
+      }
       setHydrated(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -210,7 +261,23 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       active = false;
       sub.subscription.unsubscribe();
     };
-  }, [supabase, loadAll, clearData]);
+  }, [supabase, loadAll, clearData, loadFromSnapshot, syncQueue]);
+
+  // Estado de conexión: al volver el internet, sincronizar y refrescar.
+  useEffect(() => {
+    setOnline(typeof navigator === "undefined" ? true : navigator.onLine);
+    const goOnline = () => {
+      setOnline(true);
+      syncQueue().then(() => loadAll());
+    };
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, [syncQueue, loadAll]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -338,25 +405,38 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       }
       const today = REFERENCE_TODAY.getDate();
       const isPases = member.planType === "pases";
-      // Register attendance.
-      if (gymId) {
-        await supabase.from("checkins").insert({
-          gym_id: gymId,
-          member_id: member.id,
-          checked_at: new Date().toISOString(),
-          result: "permitido",
-          pass_consumed: isPases,
-        });
-        if (isPases) {
-          await supabase.from("members").update({ passes_left: Math.max(0, (member.passesLeft ?? 0) - 1) }).eq("id", member.id);
-        }
-      }
+      const checkedAt = new Date().toISOString();
+
       const updated: Member = {
         ...member,
         attendanceDays: member.attendanceDays.includes(today) ? member.attendanceDays : [...member.attendanceDays, today],
         ...(isPases ? { passesLeft: Math.max(0, (member.passesLeft ?? 0) - 1) } : {}),
       };
-      setMembers((current) => current.map((m) => (m.id === member.id ? updated : m)));
+
+      // Actualizar estado local + snapshot (para que persista y funcione offline).
+      const nextMembers = members.map((m) => (m.id === member.id ? updated : m));
+      setMembers(nextMembers);
+      if (gymId) saveSnapshot({ gymId, settings, members: nextMembers, plans, savedAt: checkedAt });
+
+      // Persistir el registro: online → Supabase; si falla o está offline → cola local.
+      const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
+      if (gymId) {
+        let wrote = false;
+        if (isOnline) {
+          try {
+            await supabase.from("checkins").insert({ gym_id: gymId, member_id: member.id, checked_at: checkedAt, result: "permitido", pass_consumed: isPases });
+            if (isPases) await supabase.from("members").update({ passes_left: updated.passesLeft }).eq("id", member.id);
+            wrote = true;
+          } catch {
+            wrote = false;
+          }
+        }
+        if (!wrote) {
+          enqueue({ localId: `${member.id}-${checkedAt}`, gymId, memberId: member.id, checkedAt, passConsumed: isPases });
+          setPendingCount(getQueue().length);
+        }
+      }
+
       const post = statusOf(updated, settings.locale);
       const level = post.level === "warn" ? "amber" : "green";
       const sub = isPases
@@ -364,7 +444,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         : `Válido hasta ${new Date(updated.dueDate! + "T00:00:00").toLocaleDateString(settings.locale, { day: "2-digit", month: "2-digit", year: "numeric" })}`;
       return { level, title: "Acceso permitido", sub, name: member.name, initials: initials(member.name), member: updated };
     },
-    [supabase, gymId, members, settings.locale],
+    [supabase, gymId, members, settings, plans],
   );
 
   const statusFor = useCallback((m: Member) => statusOf(m, settings.locale), [settings.locale]);
@@ -372,12 +452,12 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<GymCtx>(
     () => ({
-      hydrated, authed: !!user, members, plans, settings, search, modal,
+      hydrated, authed: !!user, members, plans, settings, search, modal, online, pendingCount,
       login, logout, setSearch, updateSettings,
       openAddMember, openPayment, openAddPlan, openEditPlan, closeModal,
       addMember, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById,
     }),
-    [hydrated, user, members, plans, settings, search, modal, login, logout, updateSettings, openAddMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById],
+    [hydrated, user, members, plans, settings, search, modal, online, pendingCount, login, logout, updateSettings, openAddMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
