@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useGym } from "@/lib/store";
 import { LogoMark, Wordmark } from "@/components/Logo";
 import { amIPlatformAdmin } from "@/app/actions/admin";
@@ -72,10 +71,7 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
-        <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-muted)", marginTop: 20 }}>
-          ¿No tenés cuenta?{" "}
-          <Link href="/registro" style={{ color: "var(--primary)", fontWeight: 600, textDecoration: "none" }}>Crear cuenta</Link>
-        </div>
+        <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-faint)", marginTop: 20 }}>Cuotafit · acceso privado</div>
       </div>
     </div>
   );

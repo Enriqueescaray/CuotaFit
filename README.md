@@ -2,7 +2,7 @@
 
 **SaaS de administración de gimnasios** para dueños de gimnasios pequeños y medianos de LATAM. Cuotafit resuelve los tres dolores centrales de un gimnasio: **socios y membresías**, **cobros y morosidad**, y **control de acceso** — con un panel simple, en español y multi‑gimnasio.
 
-> Estado: **MVP funcional** con backend real (Supabase). Auth, datos, control de acceso por PIN y registro self‑serve andando end‑to‑end.
+> Estado: **MVP funcional** en producción (Supabase). Auth, datos, control de acceso por PIN y panel de super‑admin andando end‑to‑end.
 
 ---
 
@@ -17,7 +17,7 @@
 | **Planes** | Crear, editar y eliminar planes (por tiempo o por pases). |
 | **Reportes** | Ingresos por mes y pagos recientes. |
 | **Configuración** | Nombre del gimnasio, moneda, bloqueo de acceso a vencidos, modo claro/oscuro. |
-| **Cuentas** | Login real y **registro self‑serve** (crea gimnasio + owner + planes por defecto). Multi‑tenant con aislamiento por RLS. |
+| **Cuentas** | Login real. Alta de gimnasios **solo desde el panel de super‑admin** (`/admin`): el dueño de la plataforma crea el gimnasio + su usuario + planes, controla sus credenciales y su suscripción (activar/suspender). Multi‑tenant con aislamiento por RLS. |
 
 ---
 
@@ -38,9 +38,10 @@
 app/
   (app)/                  # rutas con sesión (layout = AppShell)
     dashboard/  socios/  socios/[id]/  asistencias/  planes/  reportes/  configuracion/
-  login/  registro/       # auth
+  login/                  # login (admins → /admin, gimnasios → /dashboard)
+  admin/                  # panel de super‑admin (dueño de la plataforma)
   checkin/                # kiosco de check‑in (pantalla completa)
-  actions/auth.ts         # Server Action: registro self‑serve (service role)
+  actions/admin.ts        # Server Actions del panel (crear gimnasio, suscripción, credenciales)
   icon.svg                # favicon (isotipo Cuotafit)
   layout.tsx  globals.css  page.tsx
 components/
@@ -87,21 +88,21 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable key>
 SUPABASE_SECRET_KEY=<secret key>   # solo servidor; nunca se commitea
 ```
 
-> `.env.local` está en `.gitignore`. La `SUPABASE_SECRET_KEY` da acceso total (salta RLS) y solo se usa del lado servidor (registro self‑serve). No la expongas.
+> `.env.local` está en `.gitignore`. La `SUPABASE_SECRET_KEY` da acceso total (salta RLS) y solo se usa del lado servidor (panel de super‑admin). No la expongas. `PLATFORM_ADMIN_EMAILS` define qué emails acceden a `/admin`.
 
 ### 3. Base de datos
 En el **SQL Editor** de Supabase, ejecutar en orden:
 1. `supabase/migrations/0001_init.sql` (esquema + RLS)
 2. `supabase/seed.sql` (datos demo — opcional)
 
-Para vincular un login a un gimnasio: crear el usuario en **Authentication → Users** y luego insertar su fila en `profiles` (`id`, `gym_id`, `role='owner'`). El **registro self‑serve** (`/registro`) hace todo esto automáticamente.
+Los gimnasios se crean **desde el panel de super‑admin** (`/admin` → "Crear gimnasio"): eso arma el usuario dueño, el gimnasio y sus planes, y devuelve las credenciales. (También se puede hacer a mano en Supabase creando el usuario en **Authentication → Users** e insertando su fila en `profiles`.)
 
 ### 4. Desarrollo
 ```bash
 npm install
 npm run dev      # http://localhost:3000
 ```
-Rutas: `/registro` (crear cuenta), `/login`, y el panel en `/dashboard`.
+Rutas: `/login`, el panel del gimnasio en `/dashboard`, y el panel de super‑admin en `/admin`.
 
 ### 5. Producción
 ```bash
@@ -140,7 +141,7 @@ Nombre e identidad: **Cuotafit** (cuota + fit). Isotipo "C · Ciclo" (la C es un
 
 - Datos aislados por **RLS** por gimnasio; una consulta sin sesión devuelve 0 filas.
 - La clave secreta de Supabase vive solo en `.env.local` / variables de Vercel, nunca en el repo.
-- El registro self‑serve corre en un **Server Action** (la clave secreta nunca llega al navegador).
+- La creación de gimnasios y el manejo de credenciales corren en **Server Actions** gateados por `PLATFORM_ADMIN_EMAILS` (la clave secreta nunca llega al navegador).
 
 ---
 
