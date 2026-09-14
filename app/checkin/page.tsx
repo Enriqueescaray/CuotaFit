@@ -31,8 +31,8 @@ export default function CheckinPage() {
   }, [result, reset]);
 
   const evaluate = useCallback(
-    (value: string) => {
-      setResult(checkin(value));
+    async (value: string) => {
+      setResult(await checkin(value));
     },
     [checkin],
   );

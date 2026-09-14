@@ -31,8 +31,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!hydrated || !authed) return null;
 
-  function doLogout() {
-    logout();
+  async function doLogout() {
+    await logout();
     router.replace("/login");
   }
 

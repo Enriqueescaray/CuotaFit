@@ -53,10 +53,14 @@ export interface MemberStatus {
   color: string;
 }
 
-// Fixed reference "today" so the seeded demo (calendars, due dates) stays coherent.
-export const REFERENCE_TODAY = new Date(2026, 8, 13); // 2026-09-13
-export const REFERENCE_MONTH = { year: 2026, monthIndex: 8 }; // September 2026
-export const MONTH_LABEL = "Septiembre 2026";
+// "Today" and current month, used for status, calendars and reports.
+const _now = new Date();
+export const REFERENCE_TODAY = _now;
+export const REFERENCE_MONTH = { year: _now.getFullYear(), monthIndex: _now.getMonth() };
+export const MONTH_LABEL = (() => {
+  const s = _now.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+})();
 export const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
 
 export const DEFAULT_SETTINGS: GymSettings = {

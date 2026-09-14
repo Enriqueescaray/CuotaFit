@@ -8,15 +8,24 @@ export default function LoginPage() {
   const { authed, login, settings, hydrated } = useGym();
   const router = useRouter();
   const [email, setEmail] = useState("admin@gymcontrol.app");
-  const [password, setPassword] = useState("demo1234");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   // If already logged in, skip straight to the dashboard.
   useEffect(() => {
     if (hydrated && authed) router.replace("/dashboard");
   }, [hydrated, authed, router]);
 
-  function submit() {
-    login();
+  async function submit() {
+    setError(null);
+    setPending(true);
+    const { error } = await login(email, password);
+    setPending(false);
+    if (error) {
+      setError("Email o contraseña incorrectos.");
+      return;
+    }
     router.replace("/dashboard");
   }
 
@@ -35,17 +44,20 @@ export default function LoginPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Email</div>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} style={inputStyle} />
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Contraseña</div>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} style={inputStyle} />
             </div>
+            {error && (
+              <div style={{ fontSize: 13, color: "var(--red)", background: "var(--red-soft)", borderRadius: 8, padding: "8px 12px" }}>{error}</div>
+            )}
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <div style={{ fontSize: 13, color: "var(--primary)", fontWeight: 600, cursor: "pointer" }}>¿Olvidaste tu contraseña?</div>
             </div>
-            <button onClick={submit} style={{ width: "100%", background: "var(--primary)", color: "#fff", border: "none", borderRadius: 10, padding: 13, fontWeight: 700, fontSize: 15, cursor: "pointer", marginTop: 6 }}>
-              Ingresar
+            <button onClick={submit} disabled={pending} style={{ width: "100%", background: "var(--primary)", color: "#fff", border: "none", borderRadius: 10, padding: 13, fontWeight: 700, fontSize: 15, cursor: pending ? "default" : "pointer", opacity: pending ? 0.7 : 1, marginTop: 6 }}>
+              {pending ? "Ingresando..." : "Ingresar"}
             </button>
           </div>
         </div>

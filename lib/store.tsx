@@ -1,11 +1,11 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import { createClient } from "./supabase/client";
 import {
   addMonths,
   DEFAULT_SETTINGS,
-  fmtDate,
-  genPin,
   GymSettings,
   initials,
   Member,
@@ -13,9 +13,8 @@ import {
   PaymentMethod,
   Plan,
   PlanType,
+  REFERENCE_MONTH,
   REFERENCE_TODAY,
-  SEED_MEMBERS,
-  SEED_PLANS,
   statusOf,
   toISO,
 } from "./data";
@@ -52,6 +51,13 @@ export interface PlanFormInput {
   price: string;
 }
 
+// --- DB row shapes ---
+interface GymRow { id: string; name: string; currency: string; locale: string; block_expired: boolean }
+interface PlanRow { id: string; type: PlanType; name: string; duration_months: number | null; pass_count: number | null; validity_days: number | null; price: number }
+interface MemberRow { id: string; name: string; email: string | null; phone: string | null; pin: string; plan_type: PlanType | null; plan_name: string | null; due_date: string | null; passes_total: number | null; passes_left: number | null }
+interface PaymentRow { id: string; member_id: string; amount: number; method: PaymentMethod; plan_name: string | null; paid_at: string }
+interface CheckinRow { member_id: string; checked_at: string; result: string }
+
 interface GymCtx {
   hydrated: boolean;
   authed: boolean;
@@ -61,8 +67,8 @@ interface GymCtx {
   search: string;
   modal: ModalState;
 
-  login: () => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ error?: string }>;
+  logout: () => Promise<void>;
   setSearch: (q: string) => void;
   updateSettings: (patch: Partial<GymSettings>) => void;
 
@@ -72,68 +78,159 @@ interface GymCtx {
   openEditPlan: (planId: string) => void;
   closeModal: () => void;
 
-  addMember: (input: NewMemberInput) => void;
-  registerPayment: (memberId: string, planId: string, method: PaymentMethod) => void;
-  savePlan: (form: PlanFormInput, editingId?: string) => void;
-  deletePlan: (planId: string) => void;
-  checkin: (pin: string) => CheckinResult;
+  addMember: (input: NewMemberInput) => Promise<void>;
+  registerPayment: (memberId: string, planId: string, method: PaymentMethod) => Promise<void>;
+  savePlan: (form: PlanFormInput, editingId?: string) => Promise<void>;
+  deletePlan: (planId: string) => Promise<void>;
+  checkin: (pin: string) => Promise<CheckinResult>;
 
   statusFor: (m: Member) => MemberStatus;
   memberById: (id: string) => Member | undefined;
 }
 
 const Ctx = createContext<GymCtx | null>(null);
-const STORAGE_KEY = "gc.state.v1";
 
-interface Persisted {
-  authed: boolean;
-  members: Member[];
-  plans: Plan[];
-  settings: GymSettings;
+// "YYYY-MM" of the current month, to filter check-ins for the attendance calendar.
+const MONTH_PREFIX = `${REFERENCE_MONTH.year}-${String(REFERENCE_MONTH.monthIndex + 1).padStart(2, "0")}`;
+
+function mapPlan(r: PlanRow): Plan {
+  return {
+    id: r.id,
+    type: r.type,
+    name: r.name,
+    duration: r.duration_months ?? undefined,
+    passCount: r.pass_count ?? undefined,
+    validityDays: r.validity_days ?? undefined,
+    price: Number(r.price),
+  };
 }
 
 export function GymProvider({ children }: { children: React.ReactNode }) {
+  const supabase = useMemo(() => createClient(), []);
   const [hydrated, setHydrated] = useState(false);
-  const [authed, setAuthed] = useState(false);
-  const [members, setMembers] = useState<Member[]>(SEED_MEMBERS);
-  const [plans, setPlans] = useState<Plan[]>(SEED_PLANS);
+  const [user, setUser] = useState<User | null>(null);
+  const [gymId, setGymId] = useState<string | null>(null);
   const [settings, setSettings] = useState<GymSettings>(DEFAULT_SETTINGS);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<ModalState>(null);
-  const didLoad = useRef(false);
 
-  // Hydrate from localStorage once.
-  useEffect(() => {
-    if (didLoad.current) return;
-    didLoad.current = true;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const p = JSON.parse(raw) as Partial<Persisted>;
-        if (p.members) setMembers(p.members);
-        if (p.plans) setPlans(p.plans);
-        if (p.settings) setSettings({ ...DEFAULT_SETTINGS, ...p.settings });
-        if (typeof p.authed === "boolean") setAuthed(p.authed);
-      }
-    } catch {
-      /* ignore corrupt storage */
-    }
-    setHydrated(true);
+  const clearData = useCallback(() => {
+    setGymId(null);
+    setMembers([]);
+    setPlans([]);
+    setSettings(DEFAULT_SETTINGS);
   }, []);
 
-  // Persist on change (after hydration).
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ authed, members, plans, settings }));
-    } catch {
-      /* ignore */
+  // Load everything for the signed-in user's gym.
+  const loadAll = useCallback(async () => {
+    const { data: profile } = await supabase.from("profiles").select("gym_id").single();
+    const gid = (profile as { gym_id: string | null } | null)?.gym_id ?? null;
+    setGymId(gid);
+    if (!gid) {
+      clearData();
+      return;
     }
-  }, [hydrated, authed, members, plans, settings]);
 
-  const login = useCallback(() => setAuthed(true), []);
-  const logout = useCallback(() => setAuthed(false), []);
-  const updateSettings = useCallback((patch: Partial<GymSettings>) => setSettings((s) => ({ ...s, ...patch })), []);
+    const [{ data: gym }, { data: planRows }, { data: memberRows }, { data: paymentRows }, { data: checkinRows }] =
+      await Promise.all([
+        supabase.from("gyms").select("*").eq("id", gid).single(),
+        supabase.from("plans").select("*").order("created_at", { ascending: true }),
+        supabase.from("members").select("*").order("created_at", { ascending: true }),
+        supabase.from("payments").select("member_id, amount, method, plan_name, paid_at").order("paid_at", { ascending: false }),
+        supabase.from("checkins").select("member_id, checked_at, result").gte("checked_at", `${MONTH_PREFIX}-01`),
+      ]);
+
+    if (gym) {
+      const g = gym as GymRow;
+      setSettings({ name: g.name, currency: g.currency, locale: g.locale, blockExpired: g.block_expired });
+    }
+    setPlans(((planRows as PlanRow[]) ?? []).map(mapPlan));
+
+    // Group payments and attendance days per member.
+    const paymentsByMember = new Map<string, { date: string; amount: number; method: PaymentMethod; plan: string }[]>();
+    for (const p of (paymentRows as PaymentRow[]) ?? []) {
+      const list = paymentsByMember.get(p.member_id) ?? [];
+      list.push({ date: p.paid_at, amount: Number(p.amount), method: p.method, plan: p.plan_name ?? "" });
+      paymentsByMember.set(p.member_id, list);
+    }
+    const daysByMember = new Map<string, number[]>();
+    for (const c of (checkinRows as CheckinRow[]) ?? []) {
+      if (c.result !== "permitido") continue;
+      if (!c.checked_at.startsWith(MONTH_PREFIX)) continue;
+      const day = Number(c.checked_at.slice(8, 10));
+      const list = daysByMember.get(c.member_id) ?? [];
+      if (!list.includes(day)) list.push(day);
+      daysByMember.set(c.member_id, list);
+    }
+
+    setMembers(
+      ((memberRows as MemberRow[]) ?? []).map((r) => ({
+        id: r.id,
+        name: r.name,
+        email: r.email ?? "",
+        phone: r.phone ?? "",
+        pin: r.pin,
+        planType: (r.plan_type ?? "tiempo") as PlanType,
+        planName: r.plan_name ?? "",
+        dueDate: r.due_date ?? undefined,
+        passesTotal: r.passes_total ?? undefined,
+        passesLeft: r.passes_left ?? undefined,
+        attendanceDays: daysByMember.get(r.id) ?? [],
+        payments: paymentsByMember.get(r.id) ?? [],
+      })),
+    );
+  }, [supabase, clearData]);
+
+  // Initial session check + auth subscription.
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!active) return;
+      const u = data.session?.user ?? null;
+      setUser(u);
+      if (u) await loadAll();
+      setHydrated(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) await loadAll();
+      else clearData();
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [supabase, loadAll, clearData]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: error.message };
+      return {};
+    },
+    [supabase],
+  );
+
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, [supabase]);
+
+  const updateSettings = useCallback(
+    (patch: Partial<GymSettings>) => {
+      setSettings((s) => ({ ...s, ...patch }));
+      if (!gymId) return;
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.name !== undefined) dbPatch.name = patch.name;
+      if (patch.currency !== undefined) dbPatch.currency = patch.currency;
+      if (patch.locale !== undefined) dbPatch.locale = patch.locale;
+      if (patch.blockExpired !== undefined) dbPatch.block_expired = patch.blockExpired;
+      void supabase.from("gyms").update(dbPatch).eq("id", gymId);
+    },
+    [supabase, gymId],
+  );
 
   const openAddMember = useCallback(() => setModal({ type: "addMember" }), []);
   const openPayment = useCallback((memberId: string) => setModal({ type: "payment", memberId }), []);
@@ -142,68 +239,81 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   const closeModal = useCallback(() => setModal(null), []);
 
   const addMember = useCallback(
-    (input: NewMemberInput) => {
-      if (!input.name.trim()) return;
-      const plan = plans.find((p) => p.id === input.planId) ?? plans[0];
+    async (input: NewMemberInput) => {
+      if (!input.name.trim() || !gymId) return;
+      const plan = plans.find((p) => p.id === input.planId);
       if (!plan) return;
-      const base = {
-        id: "m" + Date.now(),
+      const row: Record<string, unknown> = {
+        gym_id: gymId,
         name: input.name.trim(),
-        email: input.email,
-        phone: input.phone,
+        email: input.email || null,
+        phone: input.phone || null,
         pin: input.pin,
-        attendanceDays: [] as number[],
-        payments: [],
+        plan_type: plan.type,
+        plan_name: plan.name,
       };
-      const member: Member =
-        plan.type === "tiempo"
-          ? { ...base, planType: "tiempo", planName: plan.name, dueDate: addMonths(REFERENCE_TODAY, plan.duration ?? 1) }
-          : { ...base, planType: "pases", planName: plan.name, passesTotal: plan.passCount, passesLeft: plan.passCount };
-      setMembers((current) => [member, ...current]);
+      if (plan.type === "tiempo") row.due_date = addMonths(REFERENCE_TODAY, plan.duration ?? 1);
+      else {
+        row.passes_total = plan.passCount;
+        row.passes_left = plan.passCount;
+      }
+      await supabase.from("members").insert(row);
+      await loadAll();
       setModal(null);
     },
-    [plans],
+    [supabase, gymId, plans, loadAll],
   );
 
   const registerPayment = useCallback(
-    (memberId: string, planId: string, method: PaymentMethod) => {
+    async (memberId: string, planId: string, method: PaymentMethod) => {
+      if (!gymId) return;
       const plan = plans.find((p) => p.id === planId);
       if (!plan) return;
-      const payment = { date: toISO(REFERENCE_TODAY), amount: plan.price, method, plan: plan.name };
-      setMembers((current) =>
-        current.map((m) => {
-          if (m.id !== memberId) return m;
-          if (plan.type === "tiempo") {
-            return { ...m, planType: "tiempo" as const, planName: plan.name, dueDate: addMonths(REFERENCE_TODAY, plan.duration ?? 1), passesTotal: undefined, passesLeft: undefined, payments: [payment, ...m.payments] };
-          }
-          return { ...m, planType: "pases" as const, planName: plan.name, passesTotal: plan.passCount, passesLeft: plan.passCount, dueDate: undefined, payments: [payment, ...m.payments] };
-        }),
-      );
+      await supabase.from("payments").insert({
+        gym_id: gymId,
+        member_id: memberId,
+        amount: plan.price,
+        method,
+        plan_name: plan.name,
+        paid_at: toISO(REFERENCE_TODAY),
+      });
+      const update: Record<string, unknown> =
+        plan.type === "tiempo"
+          ? { plan_type: "tiempo", plan_name: plan.name, due_date: addMonths(REFERENCE_TODAY, plan.duration ?? 1), passes_total: null, passes_left: null }
+          : { plan_type: "pases", plan_name: plan.name, passes_total: plan.passCount, passes_left: plan.passCount, due_date: null };
+      await supabase.from("members").update(update).eq("id", memberId);
+      await loadAll();
       setModal(null);
     },
-    [plans],
+    [supabase, gymId, plans, loadAll],
   );
 
-  const savePlan = useCallback((form: PlanFormInput, editingId?: string) => {
-    const base: Omit<Plan, "id"> =
-      form.type === "tiempo"
-        ? { type: "tiempo", name: form.name, duration: Number(form.duration), price: Number(form.price) }
-        : { type: "pases", name: form.name, passCount: Number(form.passCount), validityDays: Number(form.validityDays), price: Number(form.price) };
-    setPlans((current) => {
-      if (editingId) return current.map((p) => (p.id === editingId ? { ...p, ...base } : p));
-      return [...current, { id: "p" + Date.now(), ...base }];
-    });
-    setModal(null);
-  }, []);
+  const savePlan = useCallback(
+    async (form: PlanFormInput, editingId?: string) => {
+      if (!gymId) return;
+      const base: Record<string, unknown> =
+        form.type === "tiempo"
+          ? { gym_id: gymId, type: "tiempo", name: form.name, duration_months: Number(form.duration), pass_count: null, validity_days: null, price: Number(form.price) }
+          : { gym_id: gymId, type: "pases", name: form.name, pass_count: Number(form.passCount), validity_days: Number(form.validityDays), duration_months: null, price: Number(form.price) };
+      if (editingId) await supabase.from("plans").update(base).eq("id", editingId);
+      else await supabase.from("plans").insert(base);
+      await loadAll();
+      setModal(null);
+    },
+    [supabase, gymId, loadAll],
+  );
 
-  const deletePlan = useCallback((planId: string) => {
-    setPlans((current) => current.filter((p) => p.id !== planId));
-    setModal(null);
-  }, []);
+  const deletePlan = useCallback(
+    async (planId: string) => {
+      await supabase.from("plans").delete().eq("id", planId);
+      await loadAll();
+      setModal(null);
+    },
+    [supabase, loadAll],
+  );
 
-  // Evaluate a check-in: validate, register attendance, decrement a pass.
   const checkin = useCallback(
-    (pin: string): CheckinResult => {
+    async (pin: string): Promise<CheckinResult> => {
       const member = members.find((m) => m.pin === pin);
       if (!member) {
         return { level: "red", title: "PIN no encontrado", sub: "Verificá el PIN e intentá nuevamente", initials: "?" };
@@ -220,21 +330,34 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         };
       }
       const today = REFERENCE_TODAY.getDate();
+      const isPases = member.planType === "pases";
+      // Register attendance.
+      if (gymId) {
+        await supabase.from("checkins").insert({
+          gym_id: gymId,
+          member_id: member.id,
+          checked_at: new Date().toISOString(),
+          result: "permitido",
+          pass_consumed: isPases,
+        });
+        if (isPases) {
+          await supabase.from("members").update({ passes_left: Math.max(0, (member.passesLeft ?? 0) - 1) }).eq("id", member.id);
+        }
+      }
       const updated: Member = {
         ...member,
         attendanceDays: member.attendanceDays.includes(today) ? member.attendanceDays : [...member.attendanceDays, today],
-        ...(member.planType === "pases" ? { passesLeft: Math.max(0, (member.passesLeft ?? 0) - 1) } : {}),
+        ...(isPases ? { passesLeft: Math.max(0, (member.passesLeft ?? 0) - 1) } : {}),
       };
       setMembers((current) => current.map((m) => (m.id === member.id ? updated : m)));
       const post = statusOf(updated, settings.locale);
       const level = post.level === "warn" ? "amber" : "green";
-      const sub =
-        updated.planType === "pases"
-          ? `Te quedan ${updated.passesLeft} pase(s)`
-          : `Válido hasta ${fmtDate(updated.dueDate!, settings.locale)}`;
+      const sub = isPases
+        ? `Te quedan ${updated.passesLeft} pase(s)`
+        : `Válido hasta ${new Date(updated.dueDate! + "T00:00:00").toLocaleDateString(settings.locale, { day: "2-digit", month: "2-digit", year: "numeric" })}`;
       return { level, title: "Acceso permitido", sub, name: member.name, initials: initials(member.name), member: updated };
     },
-    [members, settings.locale],
+    [supabase, gymId, members, settings.locale],
   );
 
   const statusFor = useCallback((m: Member) => statusOf(m, settings.locale), [settings.locale]);
@@ -242,12 +365,12 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<GymCtx>(
     () => ({
-      hydrated, authed, members, plans, settings, search, modal,
+      hydrated, authed: !!user, members, plans, settings, search, modal,
       login, logout, setSearch, updateSettings,
       openAddMember, openPayment, openAddPlan, openEditPlan, closeModal,
       addMember, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById,
     }),
-    [hydrated, authed, members, plans, settings, search, modal, login, logout, updateSettings, openAddMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById],
+    [hydrated, user, members, plans, settings, search, modal, login, logout, updateSettings, openAddMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
