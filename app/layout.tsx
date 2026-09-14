@@ -11,8 +11,8 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "GymControl",
-  description: "Administración de gimnasios: socios, cobros y control de acceso.",
+  title: "Cuotafit",
+  description: "Cuotafit — administración de gimnasios: socios, cobros y control de acceso.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,0 +1,10 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 720, "h": 480 },
+    { "file": "Lockups.dc.html", "x": 820, "y": 0, "w": 560, "h": 480 },
+    { "file": "Variantes.dc.html", "x": 0, "y": 620, "w": 1120, "h": 440 },
+    { "file": "Paleta.dc.html", "x": 1220, "y": 620, "w": 520, "h": 440 },
+    { "file": "Aplicaciones.dc.html", "x": 0, "y": 1200, "w": 1120, "h": 480 }
+  ],
+  "launch": { "view": "canvas" }
+}

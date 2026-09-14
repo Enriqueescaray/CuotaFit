@@ -7,6 +7,7 @@ import type { Route } from "next";
 import { useGym } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import Modals from "./Modals";
+import { LogoMark, Wordmark } from "./Logo";
 
 const NAV: { href: Route; label: string }[] = [
   { href: "/dashboard", label: "Dashboard" },
@@ -40,12 +41,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "stretch" }}>
       {/* Sidebar */}
       <div style={{ width: 232, flex: "none", background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", padding: "20px 14px", gap: 4 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 10px 20px" }}>
-          <div style={{ width: 30, height: 30, borderRadius: 8, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
-            <div style={{ width: 11, height: 11, borderRadius: 3, background: "#fff" }} />
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px 20px" }}>
+          <LogoMark size={30} />
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.1 }}>GymControl</div>
+            <div style={{ lineHeight: 1.1 }}><Wordmark size={16} /></div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>{settings.name}</div>
           </div>
         </div>

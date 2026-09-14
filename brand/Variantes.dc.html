@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif; }
+  </style>
+</helmet>
+
+<div style="width: 1120px; height: 440px; background: #F5F6FA; box-sizing: border-box; padding: 36px 40px; display: flex; flex-direction: column;">
+
+  <div style="font-weight: 800; font-size: 22px; color: #0F1729; letter-spacing: -0.02em;">Variantes del monograma</div>
+  <div style="font-weight: 600; font-size: 14px; color: #66707F; margin-top: 4px;">Tres direcciones para el isotipo CF — elegí una como principal</div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-top: 34px;">
+
+    <!-- Variante A: sólido -->
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+      <div style="width: 128px; height: 128px; border-radius: 32px; background: #2563EB; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 28px rgba(37,99,235,0.28);">
+        <span style="font-weight: 800; font-size: 58px; color: #fff; letter-spacing: -0.05em; line-height: 1;">CF</span>
+      </div>
+      <div style="font-weight: 700; font-size: 15px; color: #0F1729;">A · Sólido</div>
+      <div style="font-weight: 500; font-size: 13px; color: #66707F; text-align: center; line-height: 1.4;">Máxima legibilidad, ideal para favicon. Seguro y directo.</div>
+    </div>
+
+    <!-- Variante B: contorno + acento -->
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+      <div style="position: relative; width: 128px; height: 128px; border-radius: 32px; background: #FFFFFF; border: 6px solid #2563EB; box-sizing: border-box; display: flex; align-items: center; justify-content: center;">
+        <span style="font-weight: 800; font-size: 54px; color: #2563EB; letter-spacing: -0.05em; line-height: 1;">CF</span>
+        <div style="position: absolute; bottom: 16px; right: 16px; width: 16px; height: 16px; border-radius: 50%; background: #A3E635;"></div>
+      </div>
+      <div style="font-weight: 700; font-size: 15px; color: #0F1729;">B · Contorno</div>
+      <div style="font-weight: 500; font-size: 13px; color: #66707F; text-align: center; line-height: 1.4;">Más liviano y moderno, con un punto lima de energía.</div>
+    </div>
+
+    <!-- Variante C: ciclo (C = anillo, F adentro) -->
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+      <div style="position: relative; width: 128px; height: 128px; border-radius: 32px; background: #2563EB; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 28px rgba(37,99,235,0.28);">
+        <svg width="92" height="92" viewBox="0 0 120 120" style="position: absolute;">
+          <circle cx="60" cy="60" r="46" fill="none" stroke="#FFFFFF" stroke-width="13" stroke-linecap="round" stroke-dasharray="214 75" transform="rotate(40 60 60)"></circle>
+        </svg>
+        <span style="position: relative; font-weight: 800; font-size: 44px; color: #FFFFFF; line-height: 1;">F</span>
+      </div>
+      <div style="font-weight: 700; font-size: 15px; color: #0F1729;">C · Ciclo</div>
+      <div style="font-weight: 500; font-size: 13px; color: #66707F; text-align: center; line-height: 1.4;">La C es un anillo (ciclo de la cuota) y la F va adentro. Distintivo.</div>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+</body>
+</html>

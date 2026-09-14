@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useGym } from "@/lib/store";
+import { LogoMark, Wordmark } from "@/components/Logo";
 
 export default function LoginPage() {
   const { authed, login, settings, hydrated } = useGym();
@@ -33,11 +34,9 @@ export default function LoginPage() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "var(--bg)" }}>
       <div style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32, justifyContent: "center" }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 14, height: 14, borderRadius: 4, background: "#fff" }} />
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>GymControl</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 32, justifyContent: "center" }}>
+          <LogoMark size={38} />
+          <Wordmark size={24} />
         </div>
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 32, boxShadow: "0 4px 20px rgba(15,23,41,0.08)" }}>
           <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Bienvenido de nuevo</div>

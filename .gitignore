@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# canvas seed output (regenerable, ~2MB); working .dc.html files are kept
+/brand/cuotafit-marca.html
+
 # vercel
 .vercel
 

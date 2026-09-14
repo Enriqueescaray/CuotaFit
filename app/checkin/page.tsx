@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buildMonthGrid, WEEKDAY_LABELS, fmtDate } from "@/lib/data";
 import { CheckinResult, useGym } from "@/lib/store";
+import { LogoGlyph } from "@/components/Logo";
 
 const BG_BY_LEVEL: Record<string, string> = { green: "#15803D", amber: "#B45309", red: "#B91C1C" };
 
@@ -60,10 +61,8 @@ export default function CheckinPage() {
   return (
     <div style={{ minHeight: "100vh", background: bg, display: "flex", flexDirection: "column", transition: "background 0.2s" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 28px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 7, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
-            <div style={{ width: 10, height: 10, borderRadius: 3, background: bg }} />
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <LogoGlyph size={28} color="#fff" />
           <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>{settings.name} · Check-in</div>
         </div>
         <div onClick={() => router.push("/dashboard")} style={{ fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", opacity: 0.85 }}>Salir</div>
