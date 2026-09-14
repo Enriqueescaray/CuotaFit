@@ -9,7 +9,7 @@ import { LogoMark, Wordmark } from "@/components/Logo";
 export default function LoginPage() {
   const { authed, login, settings, hydrated } = useGym();
   const router = useRouter();
-  const [email, setEmail] = useState("admin@gymcontrol.app");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
