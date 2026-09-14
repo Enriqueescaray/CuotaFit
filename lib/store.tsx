@@ -6,6 +6,7 @@ import { createClient } from "./supabase/client";
 import {
   addMonths,
   DEFAULT_SETTINGS,
+  genPin,
   GymSettings,
   initials,
   Member,
@@ -52,6 +53,14 @@ export interface PlanFormInput {
   price: string;
 }
 
+export interface ImportRow {
+  name: string;
+  email?: string;
+  phone?: string;
+  plan?: string;
+  pin?: string;
+}
+
 // --- DB row shapes ---
 interface GymRow { id: string; name: string; currency: string; locale: string; block_expired: boolean; subscription_status?: "trial" | "active" | "suspended"; paid_until?: string | null }
 interface PlanRow { id: string; type: PlanType; name: string; duration_months: number | null; pass_count: number | null; validity_days: number | null; price: number }
@@ -82,6 +91,7 @@ interface GymCtx {
   closeModal: () => void;
 
   addMember: (input: NewMemberInput) => Promise<void>;
+  importMembers: (rows: ImportRow[], defaultPlanId: string) => Promise<{ created: number; errors: string[] }>;
   registerPayment: (memberId: string, planId: string, method: PaymentMethod) => Promise<void>;
   savePlan: (form: PlanFormInput, editingId?: string) => Promise<void>;
   deletePlan: (planId: string) => Promise<void>;
@@ -338,6 +348,67 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     [supabase, gymId, plans, loadAll],
   );
 
+  const importMembers = useCallback(
+    async (rows: ImportRow[], defaultPlanId: string): Promise<{ created: number; errors: string[] }> => {
+      if (!gymId) return { created: 0, errors: ["Sin gimnasio."] };
+      const used = new Set(members.map((m) => m.pin));
+      const uniquePin = (preferred?: string): string => {
+        const p = (preferred ?? "").trim();
+        if (/^\d{3,6}$/.test(p) && !used.has(p)) {
+          used.add(p);
+          return p;
+        }
+        let g = genPin();
+        let tries = 0;
+        while (used.has(g) && tries < 100) {
+          g = genPin();
+          tries++;
+        }
+        used.add(g);
+        return g;
+      };
+
+      const errors: string[] = [];
+      const toInsert: Record<string, unknown>[] = [];
+      rows.forEach((r, i) => {
+        const name = (r.name ?? "").trim();
+        if (!name) {
+          errors.push(`Fila ${i + 1}: sin nombre, se omitió.`);
+          return;
+        }
+        const plan =
+          (r.plan && plans.find((p) => p.name.toLowerCase() === r.plan!.trim().toLowerCase())) ||
+          plans.find((p) => p.id === defaultPlanId);
+        if (!plan) {
+          errors.push(`Fila ${i + 1} (${name}): plan no encontrado, se omitió.`);
+          return;
+        }
+        const base: Record<string, unknown> = {
+          gym_id: gymId,
+          name,
+          email: (r.email ?? "").trim() || null,
+          phone: (r.phone ?? "").trim() || null,
+          pin: uniquePin(r.pin),
+          plan_type: plan.type,
+          plan_name: plan.name,
+        };
+        if (plan.type === "tiempo") base.due_date = addMonths(REFERENCE_TODAY, plan.duration ?? 1);
+        else {
+          base.passes_total = plan.passCount;
+          base.passes_left = plan.passCount;
+        }
+        toInsert.push(base);
+      });
+
+      if (toInsert.length === 0) return { created: 0, errors };
+      const { error } = await supabase.from("members").insert(toInsert);
+      if (error) return { created: 0, errors: [...errors, `Error al guardar: ${error.message}`] };
+      await loadAll();
+      return { created: toInsert.length, errors };
+    },
+    [supabase, gymId, members, plans, loadAll],
+  );
+
   const registerPayment = useCallback(
     async (memberId: string, planId: string, method: PaymentMethod) => {
       if (!gymId) return;
@@ -455,9 +526,9 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       hydrated, authed: !!user, members, plans, settings, search, modal, online, pendingCount,
       login, logout, setSearch, updateSettings,
       openAddMember, openPayment, openAddPlan, openEditPlan, closeModal,
-      addMember, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById,
+      addMember, importMembers, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById,
     }),
-    [hydrated, user, members, plans, settings, search, modal, online, pendingCount, login, logout, updateSettings, openAddMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById],
+    [hydrated, user, members, plans, settings, search, modal, online, pendingCount, login, logout, updateSettings, openAddMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, importMembers, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
