@@ -54,8 +54,9 @@ export interface MemberStatus {
 }
 
 // "Today" and current month, used for status, calendars and reports.
+// Normalised to local midnight so day-difference math has no off-by-one from the time of day.
 const _now = new Date();
-export const REFERENCE_TODAY = _now;
+export const REFERENCE_TODAY = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
 export const REFERENCE_MONTH = { year: _now.getFullYear(), monthIndex: _now.getMonth() };
 export const MONTH_LABEL = (() => {
   const s = _now.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
