@@ -8,6 +8,7 @@ import { useGym } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import Modals from "./Modals";
 import { LogoMark, Wordmark } from "./Logo";
+import { amIPlatformAdmin } from "@/app/actions/admin";
 
 const NAV: { href: Route; label: string }[] = [
   { href: "/dashboard", label: "Dashboard" },
@@ -28,6 +29,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Client-side auth guard (mock): bounce to login when not authenticated.
   useEffect(() => {
     if (hydrated && !authed) router.replace("/login");
+  }, [hydrated, authed, router]);
+
+  // Los administradores de la plataforma no usan el panel de un gimnasio: al panel de admin.
+  useEffect(() => {
+    if (!hydrated || !authed) return;
+    let active = true;
+    amIPlatformAdmin().then((isAdmin) => {
+      if (active && isAdmin) router.replace("/admin");
+    });
+    return () => {
+      active = false;
+    };
   }, [hydrated, authed, router]);
 
   if (!hydrated || !authed) return null;

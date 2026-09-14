@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,6 +14,7 @@ export interface AdminGym {
   paidUntil: string | null;
   createdAt: string;
   memberCount: number;
+  ownerEmail: string | null;
 }
 
 export interface AdminData {
@@ -57,14 +59,24 @@ export async function getAdminData(): Promise<AdminData> {
   if (!adminEmails().includes(email)) return { authed: true, isAdmin: false, email };
 
   const admin = createAdminClient();
-  const [{ data: gymRows }, { data: memberRows }] = await Promise.all([
+  const [{ data: gymRows }, { data: memberRows }, { data: profileRows }, usersRes] = await Promise.all([
     admin.from("gyms").select("id, name, currency, subscription_status, paid_until, created_at").order("created_at", { ascending: true }),
     admin.from("members").select("gym_id"),
+    admin.from("profiles").select("id, gym_id, role"),
+    admin.auth.admin.listUsers({ perPage: 1000 }),
   ]);
 
   const counts = new Map<string, number>();
   for (const m of (memberRows as { gym_id: string }[]) ?? []) {
     counts.set(m.gym_id, (counts.get(m.gym_id) ?? 0) + 1);
+  }
+
+  // Email (credencial de login) del dueño de cada gimnasio.
+  const emailById = new Map<string, string>();
+  for (const u of usersRes.data?.users ?? []) if (u.email) emailById.set(u.id, u.email);
+  const ownerByGym = new Map<string, string | null>();
+  for (const p of (profileRows as { id: string; gym_id: string; role: string }[]) ?? []) {
+    if (!ownerByGym.has(p.gym_id) || p.role === "owner") ownerByGym.set(p.gym_id, emailById.get(p.id) ?? null);
   }
 
   const gyms: AdminGym[] = ((gymRows as GymRow[]) ?? []).map((g) => ({
@@ -75,9 +87,43 @@ export async function getAdminData(): Promise<AdminData> {
     paidUntil: g.paid_until,
     createdAt: g.created_at,
     memberCount: counts.get(g.id) ?? 0,
+    ownerEmail: ownerByGym.get(g.id) ?? null,
   }));
 
   return { authed: true, isAdmin: true, email, gyms };
+}
+
+// Chequeo liviano: ¿el usuario logueado es admin de la plataforma?
+export async function amIPlatformAdmin(): Promise<boolean> {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  const email = (data.user?.email ?? "").toLowerCase();
+  return !!email && adminEmails().includes(email);
+}
+
+function genPassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = randomBytes(12);
+  let s = "";
+  for (const b of bytes) s += chars[b % chars.length];
+  return s + "7!";
+}
+
+// Restablece la contraseña del dueño de un gimnasio y devuelve la nueva (para que el admin la controle).
+export async function resetGymOwnerPassword(gymId: string): Promise<{ password?: string; email?: string; error?: string }> {
+  const email = await requireAdminEmail();
+  if (!email) return { error: "No autorizado" };
+
+  const admin = createAdminClient();
+  const { data: profs } = await admin.from("profiles").select("id, role").eq("gym_id", gymId);
+  const list = (profs as { id: string; role: string }[]) ?? [];
+  const owner = list.find((p) => p.role === "owner") ?? list[0];
+  if (!owner) return { error: "El gimnasio no tiene usuario dueño." };
+
+  const password = genPassword();
+  const { data: updated, error } = await admin.auth.admin.updateUserById(owner.id, { password });
+  if (error) return { error: error.message };
+  return { password, email: updated.user?.email ?? undefined };
 }
 
 export async function setGymSubscription(

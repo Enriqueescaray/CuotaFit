@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useGym } from "@/lib/store";
 import { LogoMark, Wordmark } from "@/components/Logo";
+import { amIPlatformAdmin } from "@/app/actions/admin";
 
 export default function LoginPage() {
   const { authed, login, settings, hydrated } = useGym();
@@ -14,21 +15,31 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // If already logged in, skip straight to the dashboard.
+  // If already logged in, skip the form: admins go to the panel, gyms to the dashboard.
   useEffect(() => {
-    if (hydrated && authed) router.replace("/dashboard");
+    if (!(hydrated && authed)) return;
+    let active = true;
+    amIPlatformAdmin().then((isAdmin) => {
+      if (active) router.replace(isAdmin ? "/admin" : "/dashboard");
+    });
+    return () => {
+      active = false;
+    };
   }, [hydrated, authed, router]);
 
   async function submit() {
     setError(null);
     setPending(true);
     const { error } = await login(email, password);
-    setPending(false);
     if (error) {
+      setPending(false);
       setError("Email o contraseña incorrectos.");
       return;
     }
-    router.replace("/dashboard");
+    // Los administradores de la plataforma van a su panel, no al dashboard de un gimnasio.
+    const isAdmin = await amIPlatformAdmin();
+    setPending(false);
+    router.replace(isAdmin ? "/admin" : "/dashboard");
   }
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AdminData, getAdminData, setGymSubscription, SubscriptionStatus } from "@/app/actions/admin";
+import { AdminData, getAdminData, resetGymOwnerPassword, setGymSubscription, SubscriptionStatus } from "@/app/actions/admin";
 import { useGym } from "@/lib/store";
 import { LogoMark, Wordmark } from "@/components/Logo";
 
@@ -35,6 +35,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [newPw, setNewPw] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     setData(await getAdminData());
@@ -61,6 +62,13 @@ export default function AdminPage() {
     setBusy(true);
     await setGymSubscription(gymId, status, paidUntil);
     await refresh();
+    setBusy(false);
+  }
+
+  async function resetPassword(gymId: string) {
+    setBusy(true);
+    const res = await resetGymOwnerPassword(gymId);
+    if (res.password) setNewPw((p) => ({ ...p, [gymId]: res.password! }));
     setBusy(false);
   }
 
@@ -142,15 +150,22 @@ export default function AdminPage() {
             const meta = STATUS_META[g.subscriptionStatus];
             return (
               <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 12px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ flex: 1, minWidth: 220 }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{g.name}</div>
                   <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{g.memberCount} socios · alta {fmtDate(g.createdAt.slice(0, 10))}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>Login: <span style={{ color: "var(--text)", fontWeight: 600 }}>{g.ownerEmail ?? "—"}</span></div>
+                  {newPw[g.id] && (
+                    <div style={{ marginTop: 6, fontSize: 12, background: "var(--amber-soft)", color: "var(--amber)", borderRadius: 8, padding: "6px 10px" }}>
+                      Nueva contraseña: <b style={{ fontFamily: "monospace" }}>{newPw[g.id]}</b> — copiala, no se vuelve a mostrar.
+                    </div>
+                  )}
                 </div>
                 <div style={{ fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 20, background: meta.bg, color: meta.color }}>{meta.label}</div>
                 <div style={{ fontSize: 13, color: "var(--text-muted)", width: 130 }}>Paga hasta: <span style={{ color: "var(--text)", fontWeight: 600 }}>{fmtDate(g.paidUntil)}</span></div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button disabled={busy} onClick={() => updateGym(g.id, "active", plus30ISO())} style={{ background: "var(--primary)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Marcar pagado +30d</button>
                   <button disabled={busy} onClick={() => updateGym(g.id, "suspended")} style={{ background: "var(--surface)", color: "var(--red)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Suspender</button>
+                  <button disabled={busy} onClick={() => resetPassword(g.id)} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Restablecer contraseña</button>
                 </div>
               </div>
             );
