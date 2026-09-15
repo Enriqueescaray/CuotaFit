@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildMonthGrid, MONTH_LABEL, WEEKDAY_LABELS, fmtDate } from "@/lib/data";
+import { buildMonthGrid, MONTH_LABEL, WEEKDAY_LABELS, fmtDate, subscriptionBlock } from "@/lib/data";
 import { CheckinResult, useGym } from "@/lib/store";
 import { LogoGlyph } from "@/components/Logo";
 
@@ -60,12 +60,13 @@ export default function CheckinPage() {
 
   const bg = result ? BG_BY_LEVEL[result.level] : "#2563EB";
 
-  if (hydrated && settings.subscriptionStatus === "suspended") {
+  const block = hydrated ? subscriptionBlock(settings) : null;
+  if (block) {
     return (
       <div style={{ minHeight: "100vh", background: "#0F1729", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <div style={{ textAlign: "center", color: "#fff", maxWidth: 420 }}>
-          <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 10 }}>Cuenta suspendida</div>
-          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", lineHeight: 1.5 }}>El check-in está pausado por un pago pendiente de la suscripción.</div>
+          <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 10 }}>{block.title}</div>
+          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", lineHeight: 1.5 }}>{block.body}</div>
         </div>
       </div>
     );

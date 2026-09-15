@@ -13,11 +13,13 @@
 | **Socios y membresías** | Alta/edición de socios, **PIN único** por socio, historial. Dos tipos de plan: **por tiempo** (mensual/trimestral, vence por fecha) y **por pases** (paquete de N entradas que se descuentan). |
 | **Cobros y morosidad** | Registro de pagos (efectivo/transferencia/tarjeta), dashboard de socios por vencer / vencidos / con pocos pases, reporte de ingresos. |
 | **Control de acceso por PIN** | Pantalla de **check‑in** tipo kiosco: el socio ingresa su PIN → verde "Acceso permitido" (con pases restantes o fecha de vencimiento), amarillo (por vencer / pocos pases) o rojo (vencido / sin pases). Cada check‑in **descuenta un pase** (si aplica) y **registra la asistencia del día**. |
+| **Check‑in offline (PWA)** | La app es instalable y el kiosco funciona **sin internet**: valida contra un snapshot local, encola los check‑ins y los sincroniza al volver la conexión (`lib/offline.ts`, `public/sw.js`). |
+| **Importación por CSV** | Alta masiva de socios desde `/socios` (columnas nombre/email/teléfono/plan; PIN único autogenerado). |
 | **Asistencias** | Calendario mensual por socio y del gimnasio, derivado de los check‑ins. |
 | **Planes** | Crear, editar y eliminar planes (por tiempo o por pases). |
 | **Reportes** | Ingresos por mes y pagos recientes. |
 | **Configuración** | Nombre del gimnasio, moneda, bloqueo de acceso a vencidos, modo claro/oscuro. |
-| **Cuentas** | Login real. Alta de gimnasios **solo desde el panel de super‑admin** (`/admin`): el dueño de la plataforma crea el gimnasio + su usuario + planes, controla sus credenciales y su suscripción (activar/suspender). Multi‑tenant con aislamiento por RLS. |
+| **Cuentas y suscripción** | Login real. Alta de gimnasios **solo desde el panel de super‑admin** (`/admin`): el dueño de la plataforma crea el gimnasio + su usuario + planes y controla sus credenciales. Cada gimnasio arranca con **7 días de prueba** y se **bloquea automáticamente** cuando vence la prueba o el período pago, hasta registrar el cobro. Multi‑tenant con aislamiento por RLS. |
 
 ---
 
@@ -49,14 +51,18 @@ components/
   Modals.tsx              # agregar socio / registrar pago / crear‑editar plan
   Logo.tsx                # LogoMark, LogoGlyph, Wordmark
 lib/
-  data.ts                 # tipos y helpers de negocio (estados, vencimientos, calendario)
-  store.tsx               # store global: carga y muta datos vía Supabase
+  data.ts                 # tipos y helpers de negocio (estados, vencimientos, suscripción, calendario)
+  store.tsx               # store global: carga y muta datos vía Supabase (+ cola offline)
+  offline.ts              # snapshot local + cola de check‑ins para modo sin conexión
   theme.tsx               # modo claro/oscuro
   supabase/{client,server,admin}.ts
 proxy.ts                  # refresco de sesión (ex‑middleware)
+public/sw.js              # service worker (PWA / offline)
+app/manifest.ts           # manifest de la PWA
 supabase/
-  migrations/0001_init.sql # esquema multi‑tenant + RLS + auth_gym_id()
-  seed.sql                 # gimnasio demo (10 socios, planes, pagos, check‑ins)
+  migrations/0001_init.sql          # esquema multi‑tenant + RLS + auth_gym_id()
+  migrations/0002_subscriptions.sql # estado de suscripción + paid_until por gimnasio
+  seed.sql                          # gimnasio demo (10 socios, planes, pagos, check‑ins)
 brand/                     # identidad de marca (tableros .dc.html de Claude Design)
 ```
 
@@ -70,6 +76,14 @@ brand/                     # identidad de marca (tableros .dc.html de Claude Des
 - `checkins` — asistencias (base del calendario y de las métricas).
 
 **Aislamiento multi‑tenant:** RLS restringe cada fila a `gym_id = auth_gym_id()`, donde `auth_gym_id()` resuelve el gimnasio del usuario autenticado desde `profiles`.
+
+### Suscripción y bloqueo automático
+
+Cada gimnasio tiene en `gyms` un `subscription_status` (`trial` | `active` | `suspended`) y un `paid_until` (fecha):
+
+- Al crearlo desde el panel arranca en **`trial` con `paid_until` = hoy + 7 días**.
+- La app calcula el bloqueo sola (`subscriptionGate` en `lib/data.ts`): se corta el acceso — tanto el panel del gimnasio como el kiosco de check‑in — si el admin lo **suspendió** manualmente, **o** si `paid_until` ya pasó (prueba o período pago vencido). `paid_until` es inclusivo: el día del vencimiento todavía tiene acceso.
+- No hace falta ningún cron: el bloqueo se evalúa al cargar la app. Desde `/admin`, **"Marcar pagado +30d"** pone `active` y corre `paid_until` 30 días; **"Suspender"** corta al instante.
 
 ---
 
@@ -93,7 +107,8 @@ SUPABASE_SECRET_KEY=<secret key>   # solo servidor; nunca se commitea
 ### 3. Base de datos
 En el **SQL Editor** de Supabase, ejecutar en orden:
 1. `supabase/migrations/0001_init.sql` (esquema + RLS)
-2. `supabase/seed.sql` (datos demo — opcional)
+2. `supabase/migrations/0002_subscriptions.sql` (suscripción + `paid_until`)
+3. `supabase/seed.sql` (datos demo — opcional)
 
 Los gimnasios se crean **desde el panel de super‑admin** (`/admin` → "Crear gimnasio"): eso arma el usuario dueño, el gimnasio y sus planes, y devuelve las credenciales. (También se puede hacer a mano en Supabase creando el usuario en **Authentication → Users** e insertando su fila en `profiles`.)
 
@@ -147,8 +162,10 @@ Nombre e identidad: **Cuotafit** (cuota + fit). Isotipo "C · Ciclo" (la C es un
 
 ## Roadmap
 
+- [x] Check‑in offline (PWA) e importación de socios por CSV
+- [x] Prueba de 7 días + bloqueo automático de la cuenta por falta de pago
+- [x] Wordmark del logo vectorizado a curvas (`brand/`)
 - [ ] Recordatorios automáticos de vencimiento (email / WhatsApp)
 - [ ] Roles: invitar recepcionistas (staff) al gimnasio
 - [ ] Débito automático recurrente (pasarela de pago)
 - [ ] App para socios / reserva de clases
-- [ ] Vectorizar el wordmark del logo para producción

@@ -131,7 +131,17 @@ export async function createGymAsAdmin(input: {
   }
   const userId = created.user.id;
 
-  const { data: gym, error: gErr } = await admin.from("gyms").insert({ name: gymName, currency: "ARS", locale: "es-AR" }).select("id").single();
+  // Prueba gratuita de 7 días: la cuenta arranca en 'trial' y se bloquea sola cuando
+  // vence `paid_until`, salvo que el admin registre el pago desde el panel ("Marcar pagado").
+  const trialUntil = new Date();
+  trialUntil.setDate(trialUntil.getDate() + 7);
+  const paidUntil = trialUntil.toISOString().slice(0, 10);
+
+  const { data: gym, error: gErr } = await admin
+    .from("gyms")
+    .insert({ name: gymName, currency: "ARS", locale: "es-AR", subscription_status: "trial", paid_until: paidUntil })
+    .select("id")
+    .single();
   if (gErr || !gym) {
     await admin.auth.admin.deleteUser(userId);
     return { error: "No se pudo crear el gimnasio." };

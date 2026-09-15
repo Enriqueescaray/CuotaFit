@@ -121,6 +121,48 @@ export function initials(name: string): string {
     .toUpperCase();
 }
 
+// ---- Suscripción SaaS del gimnasio (trial / pago) ----
+
+export type SubscriptionReason = "suspended" | "expired" | null;
+
+// Decide si la cuenta del gimnasio está bloqueada. Se bloquea si el admin la suspendió
+// manualmente, o si `paidUntil` (fin del trial o del período pago) ya pasó. `paidUntil`
+// es inclusivo: el día de vencimiento todavía tiene acceso; se bloquea al día siguiente.
+// Un gimnasio "active"/"trial" sin fecha nunca se bloquea (no vence).
+export function subscriptionGate(
+  s: { subscriptionStatus: SubscriptionStatus; paidUntil?: string | null },
+  today: Date = REFERENCE_TODAY,
+): { blocked: boolean; reason: SubscriptionReason } {
+  if (s.subscriptionStatus === "suspended") return { blocked: true, reason: "suspended" };
+  if (s.paidUntil && parseISO(s.paidUntil).getTime() < today.getTime()) return { blocked: true, reason: "expired" };
+  return { blocked: false, reason: null };
+}
+
+// Texto de la pantalla de bloqueo (o null si la cuenta está habilitada).
+export function subscriptionBlock(
+  settings: GymSettings,
+  today: Date = REFERENCE_TODAY,
+): { title: string; body: string } | null {
+  const { blocked, reason } = subscriptionGate(settings, today);
+  if (!blocked) return null;
+  if (reason === "suspended") {
+    return {
+      title: "Cuenta suspendida",
+      body: `El acceso a ${settings.name} está pausado por un pago pendiente de la suscripción. Regularizá el pago para reactivar la cuenta.`,
+    };
+  }
+  if (settings.subscriptionStatus === "trial") {
+    return {
+      title: "Tu prueba gratuita terminó",
+      body: `La prueba de Cuotafit para ${settings.name} finalizó. Activá tu suscripción para seguir usando la plataforma.`,
+    };
+  }
+  return {
+    title: "La suscripción venció",
+    body: `La suscripción de ${settings.name} venció. Regularizá el pago para reactivar el acceso.`,
+  };
+}
+
 export function statusOf(m: Member, locale = "es-AR", today: Date = REFERENCE_TODAY): MemberStatus {
   if (m.planType === "tiempo") {
     const diff = daysDiff(m.dueDate!, today);

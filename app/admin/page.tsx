@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AdminData, createGymAsAdmin, getAdminData, resetGymOwnerPassword, setGymSubscription, SubscriptionStatus } from "@/app/actions/admin";
+import { AdminData, AdminGym, createGymAsAdmin, getAdminData, resetGymOwnerPassword, setGymSubscription, SubscriptionStatus } from "@/app/actions/admin";
 import { useGym } from "@/lib/store";
+import { daysDiff, subscriptionGate } from "@/lib/data";
 import { LogoMark, Wordmark } from "@/components/Logo";
 
 const inputStyle: React.CSSProperties = {
@@ -11,11 +12,15 @@ const inputStyle: React.CSSProperties = {
   background: "var(--surface-alt)", color: "var(--text)", fontSize: 14, boxSizing: "border-box",
 };
 
-const STATUS_META: Record<SubscriptionStatus, { label: string; bg: string; color: string }> = {
-  active: { label: "Activo", bg: "var(--green-soft)", color: "var(--green)" },
-  trial: { label: "Prueba", bg: "var(--amber-soft)", color: "var(--amber)" },
-  suspended: { label: "Suspendido", bg: "var(--red-soft)", color: "var(--red)" },
-};
+// Estado "efectivo" que ve el admin: incluye el vencimiento automático (trial o pago) además
+// de la suspensión manual, así una cuenta que dejó de pagar aparece como "Vencido" sola.
+function effMeta(g: Pick<AdminGym, "subscriptionStatus" | "paidUntil">): { label: string; bg: string; color: string } {
+  const { reason } = subscriptionGate(g);
+  if (reason === "suspended") return { label: "Suspendido", bg: "var(--red-soft)", color: "var(--red)" };
+  if (reason === "expired") return { label: "Vencido", bg: "var(--red-soft)", color: "var(--red)" };
+  if (g.subscriptionStatus === "trial") return { label: "Prueba", bg: "var(--amber-soft)", color: "var(--amber)" };
+  return { label: "Activo", bg: "var(--green-soft)", color: "var(--green)" };
+}
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
@@ -143,8 +148,8 @@ export default function AdminPage() {
 
   // --- Admin dashboard ---
   const gyms = data.gyms ?? [];
-  const activos = gyms.filter((g) => g.subscriptionStatus === "active").length;
-  const suspendidos = gyms.filter((g) => g.subscriptionStatus === "suspended").length;
+  const activos = gyms.filter((g) => !subscriptionGate(g).blocked).length;
+  const bloqueados = gyms.filter((g) => subscriptionGate(g).blocked).length;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "28px 32px 60px" }}>
@@ -165,8 +170,8 @@ export default function AdminPage() {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 24 }}>
           <KpiCard label="Gimnasios" value={String(gyms.length)} />
-          <KpiCard label="Pagando (activos)" value={String(activos)} color="var(--green)" />
-          <KpiCard label="Suspendidos" value={String(suspendidos)} color={suspendidos ? "var(--red)" : undefined} />
+          <KpiCard label="Habilitados" value={String(activos)} color="var(--green)" />
+          <KpiCard label="Bloqueados" value={String(bloqueados)} color={bloqueados ? "var(--red)" : undefined} />
         </div>
 
         {/* Crear gimnasio */}
@@ -211,7 +216,13 @@ export default function AdminPage() {
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 8 }}>
           {gyms.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)", fontSize: 14 }}>Todavía no hay gimnasios registrados.</div>}
           {gyms.map((g) => {
-            const meta = STATUS_META[g.subscriptionStatus];
+            const meta = effMeta(g);
+            const gate = subscriptionGate(g);
+            const daysLeft = g.paidUntil ? daysDiff(g.paidUntil) : null;
+            const trialHint =
+              g.subscriptionStatus === "trial" && !gate.blocked && daysLeft !== null
+                ? daysLeft === 0 ? "vence hoy" : `quedan ${daysLeft} día${daysLeft === 1 ? "" : "s"}`
+                : null;
             return (
               <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 12px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 220 }}>
@@ -225,7 +236,10 @@ export default function AdminPage() {
                   )}
                 </div>
                 <div style={{ fontSize: 11, fontWeight: 700, padding: "5px 10px", borderRadius: 20, background: meta.bg, color: meta.color }}>{meta.label}</div>
-                <div style={{ fontSize: 13, color: "var(--text-muted)", width: 130 }}>Paga hasta: <span style={{ color: "var(--text)", fontWeight: 600 }}>{fmtDate(g.paidUntil)}</span></div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", width: 130 }}>
+                  Paga hasta: <span style={{ color: "var(--text)", fontWeight: 600 }}>{fmtDate(g.paidUntil)}</span>
+                  {trialHint && <span style={{ display: "block", fontSize: 11, color: "var(--amber)", fontWeight: 600 }}>Prueba: {trialHint}</span>}
+                </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button disabled={busy} onClick={() => updateGym(g.id, "active", plus30ISO())} style={{ background: "var(--primary)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Marcar pagado +30d</button>
                   <button disabled={busy} onClick={() => updateGym(g.id, "suspended")} style={{ background: "var(--surface)", color: "var(--red)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Suspender</button>
