@@ -112,7 +112,7 @@ export default function AdminPage() {
     return (
       <Centered>
         <div style={{ width: "100%", maxWidth: 380 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 28, justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 28, justifyContent: "center" }}>
             <LogoMark size={34} />
             <Wordmark size={22} />
           </div>
@@ -155,7 +155,7 @@ export default function AdminPage() {
     <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "28px 32px 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <LogoMark size={34} />
             <div>
               <div style={{ lineHeight: 1.1 }}><Wordmark size={20} /></div>

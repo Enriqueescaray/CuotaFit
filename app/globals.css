@@ -37,6 +37,12 @@
   --red-soft: #3A1616;
 }
 
+/* Isotipo CF: versión oscura sobre tema claro, blanca sobre tema oscuro. */
+.cf-mark .cf-on-light { display: block; }
+.cf-mark .cf-on-dark { display: none; }
+[data-theme="dark"] .cf-mark .cf-on-light { display: none; }
+[data-theme="dark"] .cf-mark .cf-on-dark { display: block; }
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);

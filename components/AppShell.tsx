@@ -70,7 +70,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "stretch" }}>
       {/* Sidebar */}
       <div style={{ width: 232, flex: "none", background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", padding: "20px 14px", gap: 4 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px 20px" }}>
           <LogoMark size={30} />
           <div>
             <div style={{ lineHeight: 1.1 }}><Wordmark size={16} /></div>

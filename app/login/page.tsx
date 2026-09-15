@@ -35,7 +35,7 @@ export default function LoginPage() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "var(--bg)" }}>
       <div style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 32, justifyContent: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 32, justifyContent: "center" }}>
           <LogoMark size={38} />
           <Wordmark size={24} />
         </div>

@@ -1,53 +1,34 @@
-// Isotipo "CF · Ciclo" de Cuotafit: la C es un anillo (ciclo de la cuota) con la F dentro.
-// SVG autocontenido (la F es vectorial, sin depender de una fuente) para usarse
-// también como favicon.
+/* eslint-disable @next/next/no-img-element */
+// Isotipo "CF" de Cuotafit (monograma: C anillo + F con swoosh).
+// Se usa la imagen de marca (public/cf-mark*.png). Adapta el color al tema:
+// versión oscura sobre fondos claros, versión blanca sobre fondos oscuros
+// (se conmuta por CSS según <html data-theme>, ver app/globals.css).
 
 export function LogoMark({ size = 40 }: { size?: number }) {
+  const s = { height: size, width: "auto", flex: "none" } as const;
   return (
-    <svg width={size} height={size} viewBox="0 0 120 120" role="img" aria-label="Cuotafit" style={{ display: "block", flex: "none" }}>
-      <rect width="120" height="120" rx="30" fill="#2563EB" />
-      <circle
-        cx="60"
-        cy="60"
-        r="40"
-        fill="none"
-        stroke="#FFFFFF"
-        strokeWidth="10"
-        strokeLinecap="round"
-        strokeDasharray="186 65"
-        transform="rotate(40 60 60)"
-      />
-      {/* F */}
-      <rect x="52" y="44" width="7" height="32" rx="2" fill="#FFFFFF" />
-      <rect x="52" y="44" width="22" height="7" rx="2" fill="#FFFFFF" />
-      <rect x="52" y="57" width="16" height="7" rx="2" fill="#FFFFFF" />
-    </svg>
+    <span className="cf-mark" style={{ display: "inline-flex", flex: "none", lineHeight: 0 }}>
+      <img className="cf-on-light" src="/cf-mark.png" alt="Cuotafit" style={s} />
+      <img className="cf-on-dark" src="/cf-mark-blanco.png" alt="Cuotafit" style={s} />
+    </span>
   );
 }
 
-// Solo el glifo (anillo + F) sin el cuadrado de fondo, para fondos de color.
+// Solo el glifo en un color fijo (para cabeceras de color, p. ej. check-in).
+// color "#fff"/"white" usa la versión blanca; cualquier otro, la oscura.
 export function LogoGlyph({ size = 28, color = "#FFFFFF" }: { size?: number; color?: string }) {
+  const c = color.toLowerCase();
+  const white = c === "#fff" || c === "#ffffff" || c === "white";
   return (
-    <svg width={size} height={size} viewBox="0 0 120 120" role="img" aria-label="Cuotafit" style={{ display: "block", flex: "none" }}>
-      <circle
-        cx="60"
-        cy="60"
-        r="40"
-        fill="none"
-        stroke={color}
-        strokeWidth="10"
-        strokeLinecap="round"
-        strokeDasharray="186 65"
-        transform="rotate(40 60 60)"
-      />
-      <rect x="52" y="44" width="7" height="32" rx="2" fill={color} />
-      <rect x="52" y="44" width="22" height="7" rx="2" fill={color} />
-      <rect x="52" y="57" width="16" height="7" rx="2" fill={color} />
-    </svg>
+    <img
+      src={white ? "/cf-mark-blanco.png" : "/cf-mark.png"}
+      alt="Cuotafit"
+      style={{ height: size, width: "auto", display: "block", flex: "none" }}
+    />
   );
 }
 
-// Wordmark "Cuotafit" con las dos partes en distinto color.
+// Wordmark "Cuotafit" con las dos partes en distinto color (fuente de marca).
 export function Wordmark({ size = 22 }: { size?: number }) {
   return (
     <span style={{ fontWeight: 800, fontSize: size, letterSpacing: "-0.03em", lineHeight: 1 }}>
