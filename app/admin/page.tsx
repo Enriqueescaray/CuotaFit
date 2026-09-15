@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AdminData, createGymAsAdmin, getAdminData, resetGymOwnerPassword, setGymSubscription, SubscriptionStatus } from "@/app/actions/admin";
 import { useGym } from "@/lib/store";
 import { LogoMark, Wordmark } from "@/components/Logo";
@@ -19,7 +20,7 @@ const STATUS_META: Record<SubscriptionStatus, { label: string; bg: string; color
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return new Date(y, m - 1, d).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 function plus30ISO() {
@@ -30,7 +31,13 @@ function plus30ISO() {
 
 export default function AdminPage() {
   const { login, logout } = useGym();
+  const router = useRouter();
   const [data, setData] = useState<AdminData | null>(null);
+
+  async function doLogout() {
+    await logout();
+    router.push("/login");
+  }
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -128,7 +135,7 @@ export default function AdminPage() {
         <div style={{ textAlign: "center", maxWidth: 420 }}>
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Acceso denegado</div>
           <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 20 }}>La cuenta {data.email} no es administrador de Cuotafit.</div>
-          <button onClick={async () => { await logout(); await refresh(); }} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Cerrar sesión</button>
+          <button onClick={doLogout} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Cerrar sesión</button>
         </div>
       </Centered>
     );
@@ -152,7 +159,7 @@ export default function AdminPage() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{data.email}</div>
-            <button onClick={async () => { await logout(); await refresh(); }} style={{ background: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 14px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Salir</button>
+            <button onClick={doLogout} style={{ background: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 14px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Salir</button>
           </div>
         </div>
 

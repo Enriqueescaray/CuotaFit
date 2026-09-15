@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildMonthGrid, WEEKDAY_LABELS, fmtDate } from "@/lib/data";
+import { buildMonthGrid, MONTH_LABEL, WEEKDAY_LABELS, fmtDate } from "@/lib/data";
 import { CheckinResult, useGym } from "@/lib/store";
 import { LogoGlyph } from "@/components/Logo";
 
@@ -156,7 +156,7 @@ function ResultView({ result, locale, onNext }: { result: CheckinResult; locale:
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Asistencia · Septiembre</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Asistencia · {MONTH_LABEL}</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{member.attendanceDays.length} días</div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5, marginBottom: 5 }}>

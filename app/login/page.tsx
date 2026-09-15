@@ -1,30 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGym } from "@/lib/store";
 import { LogoMark, Wordmark } from "@/components/Logo";
 import { amIPlatformAdmin } from "@/app/actions/admin";
 
 export default function LoginPage() {
-  const { authed, login, settings, hydrated } = useGym();
+  const { login } = useGym();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // If already logged in, skip the form: admins go to the panel, gyms to the dashboard.
-  useEffect(() => {
-    if (!(hydrated && authed)) return;
-    let active = true;
-    amIPlatformAdmin().then((isAdmin) => {
-      if (active) router.replace(isAdmin ? "/admin" : "/dashboard");
-    });
-    return () => {
-      active = false;
-    };
-  }, [hydrated, authed, router]);
+  // Nota: no auto-redirigimos a los ya logueados — así se puede cambiar de cuenta
+  // (p.ej. el admin entrando a la cuenta de un gimnasio) sin quedar atrapado en /admin.
 
   async function submit() {
     setError(null);
@@ -50,7 +41,7 @@ export default function LoginPage() {
         </div>
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 32, boxShadow: "0 4px 20px rgba(15,23,41,0.08)" }}>
           <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Bienvenido de nuevo</div>
-          <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 24 }}>Ingresá a tu panel de {settings.name}</div>
+          <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 24 }}>Ingresá con tu cuenta</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Email</div>
