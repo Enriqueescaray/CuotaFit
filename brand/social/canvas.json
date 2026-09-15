@@ -1,0 +1,16 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",   "title": "01 · Portada",   "x": 0,    "y": 0,    "w": 1080, "h": 1350 },
+    { "file": "Slide2.dc.html", "title": "02 · Problema",  "x": 1170, "y": 0,    "w": 1080, "h": 1350 },
+    { "file": "Slide3.dc.html", "title": "03 · Check-in",  "x": 2340, "y": 0,    "w": 1080, "h": 1350 },
+    { "file": "Slide4.dc.html", "title": "04 · Cobros",    "x": 3510, "y": 0,    "w": 1080, "h": 1350 },
+    { "file": "Slide5.dc.html", "title": "05 · Planes",    "x": 4680, "y": 0,    "w": 1080, "h": 1350 },
+    { "file": "Slide6.dc.html", "title": "06 · CTA",       "x": 5850, "y": 0,    "w": 1080, "h": 1350 },
+    { "file": "Story.dc.html",  "title": "Historia",       "x": 0,    "y": 1520, "w": 1080, "h": 1920 }
+  ],
+  "annotations": [
+    { "id": "note-carrusel", "x": 0, "y": -150, "w": 1080, "text": "CARRUSEL DE INSTAGRAM · 1080 × 1350 (4:5) — 6 slides. Desliza en orden. Exporta cada artboard como PNG desde el botón Export." },
+    { "id": "note-story", "x": 1200, "y": 1520, "w": 700, "text": "HISTORIA · 1080 × 1920 (9:16). Para Stories. Reemplaza [@tu_usuario] por tu cuenta y confirma el dominio cuotafit.com." }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -11,13 +11,15 @@ export default function DashboardPage() {
   const view = members.map((m) => ({ m, status: statusFor(m) }));
   const activeCount = view.filter((x) => x.status.level !== "danger").length;
   const expiredCount = view.filter((x) => x.status.level === "danger").length;
-  const monthRevenue = members.flatMap((m) => m.payments).filter((p) => p.date.startsWith("2026-09")).reduce((a, p) => a + p.amount, 0);
+  const monthKey = `${REFERENCE_TODAY.getFullYear()}-${String(REFERENCE_TODAY.getMonth() + 1).padStart(2, "0")}`;
+  const monthName = REFERENCE_TODAY.toLocaleDateString(settings.locale, { month: "long" });
+  const monthRevenue = members.flatMap((m) => m.payments).filter((p) => p.date.startsWith(monthKey)).reduce((a, p) => a + p.amount, 0);
   const todayCheckins = members.filter((m) => m.attendanceDays.includes(REFERENCE_TODAY.getDate())).length;
 
   const kpis = [
     { label: "Socios activos", value: String(activeCount), sub: `${members.length} en total`, subColor: "var(--text-muted)" },
     { label: "Vencidos / sin pases", value: String(expiredCount), sub: expiredCount ? "Requieren cobro" : "Todo en orden", subColor: expiredCount ? "var(--red)" : "var(--green)" },
-    { label: "Ingresos del mes", value: fmtMoney(monthRevenue, settings), sub: "Septiembre (parcial)", subColor: "var(--text-muted)" },
+    { label: "Ingresos del mes", value: fmtMoney(monthRevenue, settings), sub: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} (parcial)`, subColor: "var(--text-muted)" },
     { label: "Check-ins de hoy", value: String(todayCheckins), sub: REFERENCE_TODAY.toLocaleDateString(settings.locale, { day: "2-digit", month: "long" }), subColor: "var(--text-muted)" },
   ];
 

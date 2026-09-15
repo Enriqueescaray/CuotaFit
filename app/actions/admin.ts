@@ -131,7 +131,7 @@ export async function createGymAsAdmin(input: {
   }
   const userId = created.user.id;
 
-  const { data: gym, error: gErr } = await admin.from("gyms").insert({ name: gymName }).select("id").single();
+  const { data: gym, error: gErr } = await admin.from("gyms").insert({ name: gymName, currency: "ARS", locale: "es-AR" }).select("id").single();
   if (gErr || !gym) {
     await admin.auth.admin.deleteUser(userId);
     return { error: "No se pudo crear el gimnasio." };
@@ -144,8 +144,8 @@ export async function createGymAsAdmin(input: {
   }
 
   await admin.from("plans").insert([
-    { gym_id: gym.id, type: "tiempo", name: "Mensual", duration_months: 1, price: 600 },
-    { gym_id: gym.id, type: "pases", name: "Pack 10 clases", pass_count: 10, validity_days: 30, price: 850 },
+    { gym_id: gym.id, type: "tiempo", name: "Mensual", duration_months: 1, price: 18000 },
+    { gym_id: gym.id, type: "pases", name: "Pack 10 clases", pass_count: 10, validity_days: 30, price: 22000 },
   ]);
 
   return { email, password };

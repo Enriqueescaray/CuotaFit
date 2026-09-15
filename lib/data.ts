@@ -70,8 +70,8 @@ export const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
 
 export const DEFAULT_SETTINGS: GymSettings = {
   name: "Mi Gimnasio",
-  currency: "MXN",
-  locale: "es-MX",
+  currency: "ARS",
+  locale: "es-AR",
   blockExpired: true,
   subscriptionStatus: "active", // por defecto no bloquea (hasta que el panel lo cambie)
   paidUntil: null,

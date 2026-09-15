@@ -1,6 +1,5 @@
 "use client";
 
-import { CURRENCY_OPTIONS } from "@/lib/data";
 import { useGym } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 
@@ -23,22 +22,6 @@ export default function ConfiguracionPage() {
         <div>
           <div style={labelStyle}>Nombre del gimnasio</div>
           <input value={settings.name} onChange={(e) => updateSettings({ name: e.target.value })} style={inputStyle} />
-        </div>
-
-        <div>
-          <div style={labelStyle}>Moneda</div>
-          <select
-            value={settings.currency}
-            onChange={(e) => {
-              const opt = CURRENCY_OPTIONS.find((o) => o.code === e.target.value);
-              if (opt) updateSettings({ currency: opt.code, locale: opt.locale });
-            }}
-            style={inputStyle}
-          >
-            {CURRENCY_OPTIONS.map((o) => (
-              <option key={o.code} value={o.code}>{o.label}</option>
-            ))}
-          </select>
         </div>
 
         <div style={rowStyle}>
