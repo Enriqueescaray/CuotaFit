@@ -46,7 +46,7 @@ export default function BienvenidaPage() {
           <Wordmark size={24} />
         </div>
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 32, boxShadow: "0 4px 20px rgba(15,23,41,0.08)" }}>
-          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>¡Bienvenido! 🎉</div>
+          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>¡Bienvenido!</div>
           <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 24 }}>
             Solo falta un dato para crear tu cuenta con <strong>7 días de prueba gratis</strong>.
           </div>

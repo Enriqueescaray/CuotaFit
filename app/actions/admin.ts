@@ -178,6 +178,32 @@ export async function resetGymOwnerPassword(gymId: string): Promise<{ password?:
   return { password, email: updated.user?.email ?? undefined };
 }
 
+// Elimina un gimnasio POR COMPLETO: borra el gym (arrastra por ON DELETE CASCADE sus
+// planes, socios, pagos, check-ins y perfiles) y además los usuarios de acceso (auth.users)
+// de ese gimnasio, para que el email quede libre y no queden usuarios huérfanos.
+// Acción destructiva e irreversible — la UI pide doble confirmación.
+export async function deleteGymAsAdmin(gymId: string): Promise<{ error?: string }> {
+  const email = await requireAdminEmail();
+  if (!email) return { error: "No autorizado" };
+  if (!gymId) return { error: "Falta el gimnasio." };
+
+  const admin = createAdminClient();
+
+  // Usuarios de acceso de este gimnasio (para borrarlos de auth después del cascade).
+  const { data: profs } = await admin.from("profiles").select("id").eq("gym_id", gymId);
+  const userIds = ((profs as { id: string }[]) ?? []).map((p) => p.id);
+
+  const { error: dErr } = await admin.from("gyms").delete().eq("id", gymId);
+  if (dErr) return { error: "No se pudo eliminar el gimnasio." };
+
+  // El gym borrado ya arrastró sus profiles; ahora quitamos los usuarios de auth.
+  for (const uid of userIds) {
+    await admin.auth.admin.deleteUser(uid);
+  }
+
+  return {};
+}
+
 export async function setGymSubscription(
   gymId: string,
   status: SubscriptionStatus,

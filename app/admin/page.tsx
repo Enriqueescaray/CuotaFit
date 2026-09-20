@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AdminData, AdminGym, createGymAsAdmin, getAdminData, resetGymOwnerPassword, setGymSubscription, SubscriptionStatus } from "@/app/actions/admin";
+import { AdminData, AdminGym, createGymAsAdmin, deleteGymAsAdmin, getAdminData, resetGymOwnerPassword, setGymSubscription, SubscriptionStatus } from "@/app/actions/admin";
 import { useGym } from "@/lib/store";
 import { daysDiff, subscriptionGate } from "@/lib/data";
 import { LogoMark, Wordmark } from "@/components/Logo";
@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [createForm, setCreateForm] = useState({ gymName: "", ownerEmail: "", password: "" });
   const [createError, setCreateError] = useState<string | null>(null);
   const [createResult, setCreateResult] = useState<{ email: string; password: string } | null>(null);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null); // gymId en modo "confirmar borrado"
 
   const refresh = useCallback(async () => {
     setData(await getAdminData());
@@ -77,6 +78,14 @@ export default function AdminPage() {
   async function updateGym(gymId: string, status: SubscriptionStatus, paidUntil?: string | null) {
     setBusy(true);
     await setGymSubscription(gymId, status, paidUntil);
+    await refresh();
+    setBusy(false);
+  }
+
+  async function deleteGym(gymId: string) {
+    setBusy(true);
+    await deleteGymAsAdmin(gymId);
+    setConfirmDel(null);
     await refresh();
     setBusy(false);
   }
@@ -240,11 +249,22 @@ export default function AdminPage() {
                   Paga hasta: <span style={{ color: "var(--text)", fontWeight: 600 }}>{fmtDate(g.paidUntil)}</span>
                   {trialHint && <span style={{ display: "block", fontSize: 11, color: "var(--amber)", fontWeight: 600 }}>Prueba: {trialHint}</span>}
                 </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button disabled={busy} onClick={() => updateGym(g.id, "active", plus30ISO())} style={{ background: "var(--primary)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Marcar pagado +30d</button>
-                  <button disabled={busy} onClick={() => updateGym(g.id, "suspended")} style={{ background: "var(--surface)", color: "var(--red)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Suspender</button>
-                  <button disabled={busy} onClick={() => resetPassword(g.id)} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Restablecer contraseña</button>
-                </div>
+                {confirmDel === g.id ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "var(--red-soft)", borderRadius: 10, padding: "8px 12px" }}>
+                    <span style={{ fontSize: 12, color: "var(--red)", fontWeight: 700 }}>
+                      ¿Eliminar “{g.name}” y TODOS sus datos? No se puede deshacer.
+                    </span>
+                    <button disabled={busy} onClick={() => deleteGym(g.id)} style={{ background: "var(--red)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Sí, eliminar todo</button>
+                    <button disabled={busy} onClick={() => setConfirmDel(null)} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Cancelar</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button disabled={busy} onClick={() => updateGym(g.id, "active", plus30ISO())} style={{ background: "var(--primary)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Marcar pagado +30d</button>
+                    <button disabled={busy} onClick={() => updateGym(g.id, "suspended")} style={{ background: "var(--surface)", color: "var(--red)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Suspender</button>
+                    <button disabled={busy} onClick={() => resetPassword(g.id)} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Restablecer contraseña</button>
+                    <button disabled={busy} onClick={() => setConfirmDel(g.id)} style={{ background: "var(--surface)", color: "var(--red)", border: "1px solid var(--red)", borderRadius: 8, padding: "8px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Eliminar</button>
+                  </div>
+                )}
               </div>
             );
           })}
