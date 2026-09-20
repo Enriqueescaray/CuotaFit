@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGym } from "@/lib/store";
 import { createMyGym } from "@/app/actions/onboarding";
+import { amIPlatformAdmin } from "@/app/actions/admin";
 import { LogoMark, Wordmark } from "@/components/Logo";
 
 export default function BienvenidaPage() {
@@ -12,15 +13,29 @@ export default function BienvenidaPage() {
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // null = todavía chequeando si es admin de la plataforma; true/false una vez sabido.
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
-  // Sin sesión -> a login. Si ya tiene gimnasio -> al dashboard (nada que hacer acá).
+  // Sin sesión -> a login. Si ya tiene gimnasio -> al dashboard. Si es admin de la
+  // plataforma -> al panel: el admin no tiene gimnasio propio, gestiona todo desde /admin.
   useEffect(() => {
     if (!hydrated) return;
-    if (!authed) router.replace("/login");
-    else if (hasGym) router.replace("/dashboard");
+    if (!authed) { router.replace("/login"); return; }
+    if (hasGym) { router.replace("/dashboard"); return; }
+    let active = true;
+    amIPlatformAdmin()
+      .then((admin) => {
+        if (!active) return;
+        if (admin) router.replace("/admin");
+        else setIsAdmin(false);
+      })
+      .catch(() => { if (active) setIsAdmin(false); });
+    return () => { active = false; };
   }, [hydrated, authed, hasGym, router]);
 
-  if (!hydrated || !authed || hasGym) return null;
+  // El formulario de "crear gimnasio" se muestra solo cuando confirmamos que NO es admin
+  // (evita el parpadeo del onboarding antes de redirigir a un admin al panel).
+  if (!hydrated || !authed || hasGym || isAdmin !== false) return null;
 
   async function submit() {
     if (!name.trim() || pending) return;

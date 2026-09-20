@@ -206,8 +206,14 @@ export async function deleteGymAsAdmin(gymId: string): Promise<{ error?: string 
   const { error: dErr } = await admin.from("gyms").delete().eq("id", gymId);
   if (dErr) return { error: "No se pudo eliminar el gimnasio." };
 
-  // El gym borrado ya arrastró sus profiles; ahora quitamos los usuarios de auth.
+  // El gym borrado ya arrastró sus profiles; ahora quitamos los usuarios de auth,
+  // EXCEPTO los que sean admin de la plataforma: borrar un gimnasio (p. ej. uno
+  // fantasma creado con el email del admin) NUNCA debe eliminar el acceso del admin.
+  const admins = adminEmails();
   for (const uid of userIds) {
+    const { data: u } = await admin.auth.admin.getUserById(uid);
+    const uEmail = (u.user?.email ?? "").toLowerCase();
+    if (uEmail && admins.includes(uEmail)) continue;
     await admin.auth.admin.deleteUser(uid);
   }
 

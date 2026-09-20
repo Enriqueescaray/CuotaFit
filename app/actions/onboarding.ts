@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { amIPlatformAdmin } from "./admin";
 
 // Alta self-service: el propio usuario logueado (por Google o email) crea SU gimnasio.
 // Es la versión pública de createGymAsAdmin (app/actions/admin.ts): mismo trial de 7 días
@@ -11,6 +12,9 @@ export async function createMyGym(gymName: string): Promise<{ ok?: boolean; erro
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Tenés que iniciar sesión primero." };
+
+  // El admin de la plataforma no crea gimnasio propio (gestiona todo desde /admin).
+  if (await amIPlatformAdmin()) return { error: "Tu cuenta administra la plataforma; los gimnasios se gestionan desde el panel." };
 
   const name = (gymName ?? "").trim();
   if (!name) return { error: "Escribí el nombre de tu gimnasio." };
