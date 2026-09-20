@@ -27,7 +27,7 @@ export default function MemberDetailPage() {
     <>
       <Link href="/socios" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--text-muted)", marginBottom: 16, textDecoration: "none" }}>← Volver a socios</Link>
 
-      <div style={{ display: "grid", gridTemplateColumns: "340px minmax(0,1fr)", gap: 20, alignItems: "start" }}>
+      <div className="detail-grid">
         {/* Left column */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 22, textAlign: "center" }}>

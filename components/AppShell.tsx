@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { Route } from "next";
 import { useGym } from "@/lib/store";
 import { subscriptionBlock } from "@/lib/data";
@@ -26,6 +26,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { theme, toggle } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Cerrar el menú lateral (móvil) al navegar a otra sección.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   // Client-side auth guard (mock): bounce to login when not authenticated.
   useEffect(() => {
@@ -71,9 +77,33 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", alignItems: "stretch" }}>
+    <div className="app-shell">
+      {/* Barra superior (solo móvil): logo + botón de menú */}
+      <div className="app-topbar">
+        <button
+          type="button"
+          className="app-hamburger"
+          aria-label="Abrir menú"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <LogoMark size={26} />
+          <Wordmark size={15} />
+        </div>
+      </div>
+
+      {/* Fondo oscuro que cierra el menú al tocarlo (solo móvil) */}
+      <div className={"app-overlay" + (menuOpen ? " show" : "")} onClick={() => setMenuOpen(false)} />
+
       {/* Sidebar */}
-      <div style={{ width: 232, flex: "none", background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", padding: "20px 14px", gap: 4 }}>
+      <div className={"app-sidebar" + (menuOpen ? " open" : "")}>
         <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px 20px" }}>
           <LogoMark size={30} />
           <div>
@@ -88,6 +118,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setMenuOpen(false)}
               style={{
                 display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
                 fontSize: 14, fontWeight: active ? 700 : 600, textDecoration: "none",
@@ -115,7 +146,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, minWidth: 0, padding: "28px 32px 60px", maxWidth: 1180 }}>{children}</div>
+      <div className="app-content">{children}</div>
 
       <Modals />
     </div>

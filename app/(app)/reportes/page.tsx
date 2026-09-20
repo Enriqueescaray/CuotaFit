@@ -30,6 +30,7 @@ export default function ReportesPage() {
       </div>
 
       <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, marginBottom: 20 }}>
+        <div className="chart-scroll">
         <div style={{ display: "flex", alignItems: "flex-end", gap: 18, height: 200, padding: "0 6px" }}>
           {revenueData.map(({ label, amount }, i) => (
             <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, height: "100%", justifyContent: "flex-end" }}>
@@ -38,6 +39,7 @@ export default function ReportesPage() {
               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-faint)", textTransform: "capitalize" }}>{label}</div>
             </div>
           ))}
+        </div>
         </div>
       </div>
 
