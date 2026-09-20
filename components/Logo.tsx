@@ -1,30 +1,29 @@
 /* eslint-disable @next/next/no-img-element */
-// Isotipo "CF" de Cuotafit: el monograma de la marca (el mismo que usamos en Instagram)
-// como badge cuadrado con esquinas redondeadas. Trae su propio fondo oscuro, así que
-// se ve igual sobre fondos claros y oscuros — no necesita conmutar por tema.
+// Isotipo "CF" de Cuotafit (monograma: C anillo + F con swoosh).
+// Se usa la imagen de marca (public/cf-mark*.png). Adapta el color al tema:
+// versión oscura sobre fondos claros, versión blanca sobre fondos oscuros
+// (se conmuta por CSS según <html data-theme>, ver app/globals.css).
 
 export function LogoMark({ size = 40 }: { size?: number }) {
+  const s = { height: size, width: "auto", flex: "none" } as const;
   return (
-    <img
-      src="/cf-badge.png"
-      alt="Cuotafit"
-      width={size}
-      height={size}
-      style={{ height: size, width: size, flex: "none", display: "block", borderRadius: Math.round(size * 0.22) }}
-    />
+    <span className="cf-mark" style={{ display: "inline-flex", flex: "none", lineHeight: 0 }}>
+      <img className="cf-on-light" src="/cf-mark.png" alt="Cuotafit" style={s} />
+      <img className="cf-on-dark" src="/cf-mark-blanco.png" alt="Cuotafit" style={s} />
+    </span>
   );
 }
 
-// El badge en un tamaño puntual (p. ej. cabecera del check-in). El nuevo isotipo ya
-// viene sobre fondo oscuro, así que ignoramos `color` y mostramos siempre el badge.
-export function LogoGlyph({ size = 28 }: { size?: number; color?: string }) {
+// Solo el glifo en un color fijo (para cabeceras de color, p. ej. check-in).
+// color "#fff"/"white" usa la versión blanca; cualquier otro, la oscura.
+export function LogoGlyph({ size = 28, color = "#FFFFFF" }: { size?: number; color?: string }) {
+  const c = color.toLowerCase();
+  const white = c === "#fff" || c === "#ffffff" || c === "white";
   return (
     <img
-      src="/cf-badge.png"
+      src={white ? "/cf-mark-blanco.png" : "/cf-mark.png"}
       alt="Cuotafit"
-      width={size}
-      height={size}
-      style={{ height: size, width: size, display: "block", flex: "none", borderRadius: Math.round(size * 0.22) }}
+      style={{ height: size, width: "auto", display: "block", flex: "none" }}
     />
   );
 }
