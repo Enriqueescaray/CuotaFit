@@ -22,7 +22,7 @@ const NAV: { href: Route; label: string }[] = [
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { authed, hydrated, logout, settings } = useGym();
+  const { authed, hydrated, hasGym, logout, settings } = useGym();
   const { theme, toggle } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
@@ -32,17 +32,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (hydrated && !authed) router.replace("/login");
   }, [hydrated, authed, router]);
 
-  // Los administradores de la plataforma no usan el panel de un gimnasio: al panel de admin.
+  // A dónde va cada usuario logueado: el admin de la plataforma a su panel; un dueño
+  // sin gimnasio todavía (recién registrado) al onboarding a crearlo. Un mismo efecto
+  // para no competir entre redirects.
   useEffect(() => {
     if (!hydrated || !authed) return;
     let active = true;
     amIPlatformAdmin().then((isAdmin) => {
-      if (active && isAdmin) router.replace("/admin");
+      if (!active) return;
+      if (isAdmin) router.replace("/admin");
+      else if (!hasGym) router.replace("/bienvenida");
     });
     return () => {
       active = false;
     };
-  }, [hydrated, authed, router]);
+  }, [hydrated, authed, hasGym, router]);
 
   if (!hydrated || !authed) return null;
 

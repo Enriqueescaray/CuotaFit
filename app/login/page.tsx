@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useGym } from "@/lib/store";
 import { LogoMark, Wordmark } from "@/components/Logo";
+import { GoogleButton } from "@/components/GoogleButton";
 import { amIPlatformAdmin } from "@/app/actions/admin";
 
 export default function LoginPage() {
@@ -42,6 +44,15 @@ export default function LoginPage() {
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 32, boxShadow: "0 4px 20px rgba(15,23,41,0.08)" }}>
           <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Bienvenido de nuevo</div>
           <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 24 }}>Ingresá con tu cuenta</div>
+
+          <GoogleButton label="Continuar con Google" onError={setError} />
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0" }}>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            <div style={{ fontSize: 12, color: "var(--text-faint)" }}>o con tu email</div>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Email</div>
@@ -62,7 +73,9 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
-        <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-faint)", marginTop: 20 }}>Cuotafit · acceso privado</div>
+        <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-muted)", marginTop: 20 }}>
+          ¿No tenés cuenta? <Link href="/registro" style={{ color: "var(--primary)", fontWeight: 600 }}>Registrate gratis</Link>
+        </div>
       </div>
     </div>
   );

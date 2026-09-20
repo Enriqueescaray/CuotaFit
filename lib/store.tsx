@@ -71,6 +71,7 @@ interface CheckinRow { member_id: string; checked_at: string; result: string }
 interface GymCtx {
   hydrated: boolean;
   authed: boolean;
+  hasGym: boolean;
   members: Member[];
   plans: Plan[];
   settings: GymSettings;
@@ -523,12 +524,12 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<GymCtx>(
     () => ({
-      hydrated, authed: !!user, members, plans, settings, search, modal, online, pendingCount,
+      hydrated, authed: !!user, hasGym: !!gymId, members, plans, settings, search, modal, online, pendingCount,
       login, logout, setSearch, updateSettings,
       openAddMember, openPayment, openAddPlan, openEditPlan, closeModal,
       addMember, importMembers, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById,
     }),
-    [hydrated, user, members, plans, settings, search, modal, online, pendingCount, login, logout, updateSettings, openAddMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, importMembers, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById],
+    [hydrated, user, gymId, members, plans, settings, search, modal, online, pendingCount, login, logout, updateSettings, openAddMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, importMembers, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
