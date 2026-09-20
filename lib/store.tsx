@@ -23,9 +23,17 @@ import { enqueue, getQueue, loadSnapshot, saveSnapshot, setQueue } from "./offli
 
 export type ModalState =
   | { type: "addMember" }
+  | { type: "editMember"; memberId: string }
   | { type: "payment"; memberId: string }
   | { type: "plan"; planId?: string }
   | null;
+
+export interface EditMemberInput {
+  name: string;
+  email: string;
+  phone: string;
+  pin: string;
+}
 
 export interface CheckinResult {
   level: "green" | "amber" | "red";
@@ -86,16 +94,19 @@ interface GymCtx {
   updateSettings: (patch: Partial<GymSettings>) => void;
 
   openAddMember: () => void;
+  openEditMember: (memberId: string) => void;
   openPayment: (memberId: string) => void;
   openAddPlan: () => void;
   openEditPlan: (planId: string) => void;
   closeModal: () => void;
 
   addMember: (input: NewMemberInput) => Promise<void>;
+  editMember: (memberId: string, patch: EditMemberInput) => Promise<void>;
   importMembers: (rows: ImportRow[], defaultPlanId: string) => Promise<{ created: number; errors: string[] }>;
   registerPayment: (memberId: string, planId: string, method: PaymentMethod) => Promise<void>;
   savePlan: (form: PlanFormInput, editingId?: string) => Promise<void>;
   deletePlan: (planId: string) => Promise<void>;
+  findByPin: (pin: string) => Member | undefined;
   checkin: (pin: string) => Promise<CheckinResult>;
 
   statusFor: (m: Member) => MemberStatus;
@@ -318,6 +329,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   );
 
   const openAddMember = useCallback(() => setModal({ type: "addMember" }), []);
+  const openEditMember = useCallback((memberId: string) => setModal({ type: "editMember", memberId }), []);
   const openPayment = useCallback((memberId: string) => setModal({ type: "payment", memberId }), []);
   const openAddPlan = useCallback(() => setModal({ type: "plan" }), []);
   const openEditPlan = useCallback((planId: string) => setModal({ type: "plan", planId }), []);
@@ -349,13 +361,32 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     [supabase, gymId, plans, loadAll],
   );
 
+  // Editar datos de contacto y PIN. El plan/vencimiento/pases se gestionan por pagos.
+  const editMember = useCallback(
+    async (memberId: string, patch: EditMemberInput) => {
+      if (!gymId || !patch.name.trim()) return;
+      await supabase
+        .from("members")
+        .update({
+          name: patch.name.trim(),
+          email: patch.email.trim() || null,
+          phone: patch.phone.trim() || null,
+          pin: patch.pin,
+        })
+        .eq("id", memberId);
+      await loadAll();
+      setModal(null);
+    },
+    [supabase, gymId, loadAll],
+  );
+
   const importMembers = useCallback(
     async (rows: ImportRow[], defaultPlanId: string): Promise<{ created: number; errors: string[] }> => {
       if (!gymId) return { created: 0, errors: ["Sin gimnasio."] };
       const used = new Set(members.map((m) => m.pin));
       const uniquePin = (preferred?: string): string => {
         const p = (preferred ?? "").trim();
-        if (/^\d{3,6}$/.test(p) && !used.has(p)) {
+        if (/^\d{4}$/.test(p) && !used.has(p)) {
           used.add(p);
           return p;
         }
@@ -458,6 +489,8 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     [supabase, loadAll],
   );
 
+  const findByPin = useCallback((pin: string) => members.find((m) => m.pin === pin), [members]);
+
   const checkin = useCallback(
     async (pin: string): Promise<CheckinResult> => {
       const member = members.find((m) => m.pin === pin);
@@ -477,11 +510,25 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       }
       const today = REFERENCE_TODAY.getDate();
       const isPases = member.planType === "pases";
+
+      // Un pase = un día. Si ya registró asistencia hoy, no se descuenta otro pase
+      // ni se duplica el registro: solo se le recuerda que ya ingresó.
+      if (member.attendanceDays.includes(today)) {
+        return {
+          level: "amber",
+          title: "Ya registraste tu asistencia hoy",
+          sub: isPases ? `Te quedan ${member.passesLeft ?? 0} pase(s)` : "No se descuenta otro día",
+          name: member.name,
+          initials: initials(member.name),
+          member,
+        };
+      }
+
       const checkedAt = new Date().toISOString();
 
       const updated: Member = {
         ...member,
-        attendanceDays: member.attendanceDays.includes(today) ? member.attendanceDays : [...member.attendanceDays, today],
+        attendanceDays: [...member.attendanceDays, today],
         ...(isPases ? { passesLeft: Math.max(0, (member.passesLeft ?? 0) - 1) } : {}),
       };
 
@@ -526,10 +573,10 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     () => ({
       hydrated, authed: !!user, hasGym: !!gymId, members, plans, settings, search, modal, online, pendingCount,
       login, logout, setSearch, updateSettings,
-      openAddMember, openPayment, openAddPlan, openEditPlan, closeModal,
-      addMember, importMembers, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById,
+      openAddMember, openEditMember, openPayment, openAddPlan, openEditPlan, closeModal,
+      addMember, editMember, importMembers, registerPayment, savePlan, deletePlan, findByPin, checkin, statusFor, memberById,
     }),
-    [hydrated, user, gymId, members, plans, settings, search, modal, online, pendingCount, login, logout, updateSettings, openAddMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, importMembers, registerPayment, savePlan, deletePlan, checkin, statusFor, memberById],
+    [hydrated, user, gymId, members, plans, settings, search, modal, online, pendingCount, login, logout, updateSettings, openAddMember, openEditMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, editMember, importMembers, registerPayment, savePlan, deletePlan, findByPin, checkin, statusFor, memberById],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

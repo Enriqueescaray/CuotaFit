@@ -2,18 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildMonthGrid, MONTH_LABEL, WEEKDAY_LABELS, fmtDate, subscriptionBlock } from "@/lib/data";
+import { buildMonthGrid, MONTH_LABEL, WEEKDAY_LABELS, fmtDate, subscriptionBlock, initials, type Member } from "@/lib/data";
 import { CheckinResult, useGym } from "@/lib/store";
 import { LogoGlyph } from "@/components/Logo";
 
 const BG_BY_LEVEL: Record<string, string> = { green: "#15803D", amber: "#B45309", red: "#B91C1C" };
 
 export default function CheckinPage() {
-  const { authed, hydrated, settings, checkin, online, pendingCount } = useGym();
+  const { authed, hydrated, settings, findByPin, checkin, online, pendingCount } = useGym();
   const router = useRouter();
   const [pin, setPin] = useState("");
+  const [candidate, setCandidate] = useState<Member | null>(null); // socio a confirmar
   const [result, setResult] = useState<CheckinResult | null>(null);
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [busy, setBusy] = useState(false); // buscando o registrando
+  const [busyLabel, setBusyLabel] = useState("Buscando…");
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Offline no se puede iniciar sesión: el kiosco funciona con el snapshot local,
@@ -22,41 +25,92 @@ export default function CheckinPage() {
   }, [hydrated, authed, online, router]);
 
   const reset = useCallback(() => {
+    if (lookupTimer.current) clearTimeout(lookupTimer.current);
     setPin("");
+    setCandidate(null);
     setResult(null);
+    setBusy(false);
   }, []);
 
-  // Auto-reset the result after a few seconds (kiosk convenience).
-  useEffect(() => {
-    if (!result) return;
-    const t = setTimeout(reset, 6000);
-    return () => clearTimeout(t);
-  }, [result, reset]);
-
-  const evaluate = useCallback(
-    async (value: string) => {
-      setResult(await checkin(value));
+  // Paso 1: buscar el socio por PIN (con un pequeño retardo para que se vea "procesando").
+  // No registra nada todavía: solo lo propone para confirmar.
+  const lookup = useCallback(
+    (value: string) => {
+      setBusy(true);
+      setBusyLabel("Buscando…");
+      if (lookupTimer.current) clearTimeout(lookupTimer.current);
+      lookupTimer.current = setTimeout(() => {
+        const m = findByPin(value);
+        if (!m) {
+          setResult({ level: "red", title: "PIN no encontrado", sub: "Verificá el PIN e intentá nuevamente", initials: "?" });
+        } else {
+          setCandidate(m);
+        }
+        setBusy(false);
+      }, 550);
     },
-    [checkin],
+    [findByPin],
   );
 
-  function pressDigit(d: string) {
-    if (result) return;
-    setPin((prev) => {
-      if (prev.length >= 4) return prev;
-      const next = prev + d;
-      if (next.length === 4) {
-        if (idleTimer.current) clearTimeout(idleTimer.current);
-        idleTimer.current = setTimeout(() => evaluate(next), 150);
-      }
-      return next;
-    });
-  }
+  // Paso 2: la persona confirma que es ella → recién ahí se registra la asistencia.
+  const confirm = useCallback(async () => {
+    if (!candidate || busy) return;
+    setBusy(true);
+    setBusyLabel("Registrando…");
+    const r = await checkin(candidate.pin);
+    setResult(r);
+    setCandidate(null);
+    setBusy(false);
+  }, [candidate, busy, checkin]);
 
-  function backspace() {
-    if (result) return;
+  const pressDigit = useCallback(
+    (d: string) => {
+      if (busy || result || candidate || pin.length >= 4) return;
+      const next = pin + d;
+      setPin(next);
+      // Al completar los 4 dígitos, disparar la búsqueda del socio.
+      if (next.length === 4) lookup(next);
+    },
+    [busy, result, candidate, pin, lookup],
+  );
+
+  const backspace = useCallback(() => {
+    if (busy || result || candidate) return;
     setPin((p) => p.slice(0, -1));
-  }
+  }, [busy, result, candidate]);
+
+  // Teclado físico: números para el PIN, Enter/Escape para confirmar o cancelar.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (busy) return;
+      if (candidate) {
+        if (e.key === "Enter") { e.preventDefault(); confirm(); }
+        else if (e.key === "Escape") { e.preventDefault(); reset(); }
+        return;
+      }
+      if (result) {
+        if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); reset(); }
+        return;
+      }
+      if (e.key >= "0" && e.key <= "9") { e.preventDefault(); pressDigit(e.key); }
+      else if (e.key === "Backspace") { e.preventDefault(); backspace(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, candidate, result, confirm, reset, pressDigit, backspace]);
+
+  // Auto-reset del kiosco: el resultado se limpia a los 6 s; la confirmación pendiente
+  // se cancela a los 15 s por si alguien se fue sin confirmar.
+  useEffect(() => {
+    if (result) {
+      const t = setTimeout(reset, 6000);
+      return () => clearTimeout(t);
+    }
+    if (candidate) {
+      const t = setTimeout(reset, 15000);
+      return () => clearTimeout(t);
+    }
+  }, [result, candidate, reset]);
 
   const bg = result ? BG_BY_LEVEL[result.level] : "#2563EB";
 
@@ -74,6 +128,7 @@ export default function CheckinPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: bg, display: "flex", flexDirection: "column", transition: "background 0.2s" }}>
+      <style>{`@keyframes cf-spin { to { transform: rotate(360deg); } }`}</style>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 28px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <LogoGlyph size={28} color="#fff" />
@@ -94,33 +149,73 @@ export default function CheckinPage() {
       </div>
 
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-        {!result ? (
-          <div style={{ textAlign: "center", width: "100%", maxWidth: 380 }}>
-            <div style={{ fontSize: 30, fontWeight: 800, color: "#fff", marginBottom: 6 }}>Ingresá tu PIN</div>
-            <div style={{ fontSize: 15, color: "rgba(255,255,255,0.75)", marginBottom: 28 }}>Usá el teclado para hacer check-in</div>
-            <div style={{ display: "flex", gap: 14, justifyContent: "center", marginBottom: 34 }}>
-              {[0, 1, 2, 3].map((i) => (
-                <div key={i} style={{ width: 16, height: 16, borderRadius: "50%", background: i < pin.length ? "#fff" : "rgba(255,255,255,0.28)" }} />
-              ))}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, maxWidth: 320, margin: "0 auto" }}>
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map((k, i) => {
-                if (k === "") return <div key={i} />;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => (k === "⌫" ? backspace() : pressDigit(k))}
-                    style={{ height: 72, borderRadius: 16, border: "none", background: "rgba(255,255,255,0.14)", color: "#fff", fontSize: 26, fontWeight: 700, cursor: "pointer" }}
-                  >
-                    {k}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
+        {busy ? (
+          <LoadingView label={busyLabel} />
+        ) : result ? (
           <ResultView result={result} locale={settings.locale} onNext={reset} />
+        ) : candidate ? (
+          <ConfirmView member={candidate} onConfirm={confirm} onCancel={reset} />
+        ) : (
+          <KeypadView pin={pin} onDigit={pressDigit} onBackspace={backspace} />
         )}
+      </div>
+    </div>
+  );
+}
+
+function KeypadView({ pin, onDigit, onBackspace }: { pin: string; onDigit: (d: string) => void; onBackspace: () => void }) {
+  return (
+    <div style={{ textAlign: "center", width: "100%", maxWidth: 380 }}>
+      <div style={{ fontSize: 30, fontWeight: 800, color: "#fff", marginBottom: 6 }}>Ingresá tu PIN</div>
+      <div style={{ fontSize: 15, color: "rgba(255,255,255,0.75)", marginBottom: 28 }}>Tocá los números o usá el teclado</div>
+      <div style={{ display: "flex", gap: 14, justifyContent: "center", marginBottom: 34 }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{ width: 16, height: 16, borderRadius: "50%", background: i < pin.length ? "#fff" : "rgba(255,255,255,0.28)" }} />
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, maxWidth: 320, margin: "0 auto" }}>
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map((k, i) => {
+          if (k === "") return <div key={i} />;
+          return (
+            <button
+              key={i}
+              onClick={() => (k === "⌫" ? onBackspace() : onDigit(k))}
+              style={{ height: 72, borderRadius: 16, border: "none", background: "rgba(255,255,255,0.14)", color: "#fff", fontSize: 26, fontWeight: 700, cursor: "pointer" }}
+            >
+              {k}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LoadingView({ label }: { label: string }) {
+  return (
+    <div style={{ textAlign: "center", color: "#fff" }}>
+      <div
+        style={{
+          width: 64, height: 64, margin: "0 auto 20px", borderRadius: "50%",
+          border: "5px solid rgba(255,255,255,0.25)", borderTopColor: "#fff",
+          animation: "cf-spin 0.8s linear infinite",
+        }}
+      />
+      <div style={{ fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.9)" }}>{label}</div>
+    </div>
+  );
+}
+
+function ConfirmView({ member, onConfirm, onCancel }: { member: Member; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div style={{ textAlign: "center", width: "100%", maxWidth: 400 }}>
+      <div style={{ width: 96, height: 96, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 22px", fontWeight: 800, fontSize: 34, color: "#fff" }}>{initials(member.name)}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,0.75)", marginBottom: 6 }}>Confirmá que sos vos</div>
+      <div style={{ fontSize: 34, fontWeight: 800, color: "#fff", marginBottom: 8 }}>{member.name}</div>
+      <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", marginBottom: 30 }}>Tocá “Sí, soy yo” para registrar tu asistencia</div>
+      <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+        <button onClick={onCancel} style={{ flex: 1, maxWidth: 170, background: "rgba(255,255,255,0.16)", color: "#fff", border: "none", borderRadius: 14, padding: "16px 20px", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>No soy yo</button>
+        <button onClick={onConfirm} style={{ flex: 1, maxWidth: 170, background: "#fff", color: "#2563EB", border: "none", borderRadius: 14, padding: "16px 20px", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>Sí, soy yo</button>
       </div>
     </div>
   );

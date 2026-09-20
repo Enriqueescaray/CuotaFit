@@ -7,7 +7,7 @@ import { useGym } from "@/lib/store";
 
 export default function MemberDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { members, settings, statusFor, openPayment } = useGym();
+  const { members, settings, statusFor, openPayment, openEditMember } = useGym();
   const m = members.find((x) => x.id === id);
 
   if (!m) {
@@ -41,6 +41,8 @@ export default function MemberDetailPage() {
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>PIN de acceso</div>
               <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: "0.08em", color: "var(--primary)", marginTop: 4 }}>{m.pin}</div>
             </div>
+
+            <button onClick={() => openEditMember(m.id)} style={{ width: "100%", marginTop: 14, background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: 11, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Editar socio</button>
           </div>
 
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 20 }}>

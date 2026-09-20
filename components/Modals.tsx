@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { fmtDate, fmtMoney, genPin, Plan, addMonths, PaymentMethod, REFERENCE_TODAY } from "@/lib/data";
+import { useState } from "react";
+import { fmtDate, fmtMoney, genPin, Member, Plan, addMonths, PaymentMethod, REFERENCE_TODAY } from "@/lib/data";
 import { PlanFormInput, useGym } from "@/lib/store";
 
 const inputStyle: React.CSSProperties = {
@@ -18,6 +18,43 @@ function planOptionLabel(p: Plan, settings: Parameters<typeof fmtMoney>[1]) {
     : `${p.name} (${p.passCount} pases) · ${fmtMoney(p.price, settings)}`;
 }
 
+// El PIN es siempre de 4 dígitos (el check-in acepta exactamente 4).
+const sanitizePin = (v: string) => v.replace(/\D/g, "").slice(0, 4);
+
+// Valida el PIN excluyendo al propio socio (para la edición) del control de duplicados.
+function pinIsValid(pin: string, members: Member[], excludeId?: string): boolean {
+  return /^\d{4}$/.test(pin) && !members.some((m) => m.pin === pin && m.id !== excludeId);
+}
+
+function pinError(pin: string, members: Member[], excludeId?: string): string | null {
+  if (!pin) return null;
+  if (members.some((m) => m.pin === pin && m.id !== excludeId)) return "Ese PIN ya lo usa otro socio. Elegí otro.";
+  if (!/^\d{4}$/.test(pin)) return "El PIN debe tener exactamente 4 dígitos.";
+  return null;
+}
+
+// Campo de PIN compartido por alta y edición de socios.
+function PinField({ value, onChange, error }: { value: string; onChange: (v: string) => void; error: string | null }) {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>PIN de acceso</div>
+        <div onClick={() => onChange(genPin())} style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", cursor: "pointer" }}>Regenerar</div>
+      </div>
+      <input
+        value={value}
+        onChange={(e) => onChange(sanitizePin(e.target.value))}
+        inputMode="numeric"
+        pattern="\d*"
+        maxLength={4}
+        placeholder="4 dígitos"
+        style={{ ...inputStyle, fontSize: 18, fontWeight: 700, letterSpacing: "0.1em", borderColor: error ? "var(--red)" : "var(--border)" }}
+      />
+      {error && <div style={{ fontSize: 12, fontWeight: 600, color: "var(--red)", marginTop: 6 }}>{error}</div>}
+    </div>
+  );
+}
+
 export default function Modals() {
   const { modal } = useGym();
   if (!modal) return null;
@@ -25,6 +62,7 @@ export default function Modals() {
   return (
     <ModalCard>
       {modal.type === "addMember" && <AddMemberForm />}
+      {modal.type === "editMember" && <EditMemberForm memberId={modal.memberId} />}
       {modal.type === "payment" && <PaymentForm memberId={modal.memberId} />}
       {modal.type === "plan" && <PlanForm planId={modal.planId} />}
     </ModalCard>
@@ -49,11 +87,13 @@ function ModalCard({ children }: { children: React.ReactNode }) {
 }
 
 function AddMemberForm() {
-  const { plans, settings, addMember, closeModal } = useGym();
+  const { plans, settings, members, addMember, closeModal } = useGym();
   const [form, setForm] = useState({ name: "", email: "", phone: "", planId: plans[0]?.id ?? "", pin: genPin() });
 
   const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const canSave = form.name.trim().length > 0 && pinIsValid(form.pin, members);
 
   return (
     <>
@@ -82,16 +122,56 @@ function AddMemberForm() {
             ))}
           </select>
         </div>
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>PIN de acceso</div>
-            <div onClick={() => setForm((f) => ({ ...f, pin: genPin() }))} style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", cursor: "pointer" }}>Regenerar</div>
-          </div>
-          <input value={form.pin} onChange={set("pin")} style={{ ...inputStyle, fontSize: 18, fontWeight: 700, letterSpacing: "0.1em" }} />
-        </div>
+        <PinField value={form.pin} onChange={(pin) => setForm((f) => ({ ...f, pin }))} error={pinError(form.pin, members)} />
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
           <button onClick={closeModal} style={ghostBtn}>Cancelar</button>
-          <button onClick={() => addMember(form)} style={primaryBtn}>Guardar socio</button>
+          <button onClick={() => canSave && addMember(form)} disabled={!canSave} style={{ ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" }}>Guardar socio</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function EditMemberForm({ memberId }: { memberId: string }) {
+  const { members, editMember, closeModal } = useGym();
+  const member = members.find((m) => m.id === memberId);
+  const [form, setForm] = useState({
+    name: member?.name ?? "",
+    email: member?.email ?? "",
+    phone: member?.phone ?? "",
+    pin: member?.pin ?? "",
+  });
+
+  if (!member) return null;
+
+  const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const canSave = form.name.trim().length > 0 && pinIsValid(form.pin, members, memberId);
+
+  return (
+    <>
+      <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>Editar socio</div>
+      <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>El plan se cambia desde “Registrar pago”.</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div>
+          <div style={labelStyle}>Nombre completo</div>
+          <input value={form.name} onChange={set("name")} placeholder="Ej. Ana Pérez" style={inputStyle} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <div style={labelStyle}>Email</div>
+            <input value={form.email} onChange={set("email")} placeholder="correo@mail.com" style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Teléfono</div>
+            <input value={form.phone} onChange={set("phone")} placeholder="+52 55..." style={inputStyle} />
+          </div>
+        </div>
+        <PinField value={form.pin} onChange={(pin) => setForm((f) => ({ ...f, pin }))} error={pinError(form.pin, members, memberId)} />
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button onClick={closeModal} style={ghostBtn}>Cancelar</button>
+          <button onClick={() => canSave && editMember(memberId, form)} disabled={!canSave} style={{ ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" }}>Guardar cambios</button>
         </div>
       </div>
     </>
