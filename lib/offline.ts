@@ -29,6 +29,17 @@ export function saveSnapshot(s: Snapshot): void {
   }
 }
 
+// Borra el snapshot local (socios, PIN y contacto). Se llama al cerrar sesión para no
+// dejar datos personales en un dispositivo compartido (kiosco). La cola de check-ins
+// pendientes NO se toca: son datos propios sin sincronizar y perderlos sería peor.
+export function clearSnapshot(): void {
+  try {
+    localStorage.removeItem(SNAP_KEY);
+  } catch {
+    /* almacenamiento no disponible */
+  }
+}
+
 export function loadSnapshot(): Snapshot | null {
   try {
     const raw = localStorage.getItem(SNAP_KEY);

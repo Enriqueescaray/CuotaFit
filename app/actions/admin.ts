@@ -31,13 +31,24 @@ function adminEmails(): string[] {
     .filter(Boolean);
 }
 
+// Email del usuario si es admin de la plataforma, o null. Además de estar en la
+// allowlist, exige que el email esté CONFIRMADO: así, con la confirmación de email
+// activada en Supabase, una cuenta que se auto-registró con un email de admin pero no
+// pudo verificarlo (no es dueña del buzón) nunca obtiene acceso al panel.
+type MaybeUser = { email?: string | null; email_confirmed_at?: string | null; confirmed_at?: string | null } | null;
+function adminEmailOf(user: MaybeUser): string | null {
+  if (!user) return null;
+  const email = (user.email ?? "").toLowerCase();
+  if (!email || !adminEmails().includes(email)) return null;
+  if (!(user.email_confirmed_at ?? user.confirmed_at)) return null;
+  return email;
+}
+
 // Devuelve el email del usuario logueado si es admin de la plataforma, o null.
 async function requireAdminEmail(): Promise<string | null> {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
-  const email = (data.user?.email ?? "").toLowerCase();
-  if (!email || !adminEmails().includes(email)) return null;
-  return email;
+  return adminEmailOf(data.user);
 }
 
 interface GymRow {
@@ -56,7 +67,7 @@ export async function getAdminData(): Promise<AdminData> {
   if (!user) return { authed: false, isAdmin: false };
 
   const email = (user.email ?? "").toLowerCase();
-  if (!adminEmails().includes(email)) return { authed: true, isAdmin: false, email };
+  if (!adminEmailOf(user)) return { authed: true, isAdmin: false, email };
 
   const admin = createAdminClient();
   const [{ data: gymRows }, { data: memberRows }, { data: profileRows }, usersRes] = await Promise.all([
@@ -97,8 +108,7 @@ export async function getAdminData(): Promise<AdminData> {
 export async function amIPlatformAdmin(): Promise<boolean> {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
-  const email = (data.user?.email ?? "").toLowerCase();
-  return !!email && adminEmails().includes(email);
+  return adminEmailOf(data.user) !== null;
 }
 
 function genPassword(): string {

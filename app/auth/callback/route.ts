@@ -7,7 +7,11 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/bienvenida";
+  // `next` solo puede ser una ruta interna: una sola "/" al inicio (no "//host" ni
+  // "/\host") y sin ":" (evita "javascript:" o "https:"). Así no se puede abusar del
+  // callback como redirección abierta a un dominio externo.
+  const rawNext = searchParams.get("next") ?? "/bienvenida";
+  const next = /^\/(?![/\\])[^:]*$/.test(rawNext) ? rawNext : "/bienvenida";
 
   if (code) {
     const supabase = await createClient();

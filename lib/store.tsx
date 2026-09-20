@@ -19,7 +19,7 @@ import {
   statusOf,
   toISO,
 } from "./data";
-import { enqueue, getQueue, loadSnapshot, saveSnapshot, setQueue } from "./offline";
+import { clearSnapshot, enqueue, getQueue, loadSnapshot, saveSnapshot, setQueue } from "./offline";
 
 export type ModalState =
   | { type: "addMember" }
@@ -110,7 +110,6 @@ interface GymCtx {
   checkin: (pin: string) => Promise<CheckinResult>;
 
   statusFor: (m: Member) => MemberStatus;
-  memberById: (id: string) => Member | undefined;
 }
 
 const Ctx = createContext<GymCtx | null>(null);
@@ -242,11 +241,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     for (const item of q) {
       try {
         await supabase.from("checkins").insert({ gym_id: item.gymId, member_id: item.memberId, checked_at: item.checkedAt, result: "permitido", pass_consumed: item.passConsumed });
-        if (item.passConsumed) {
-          const { data } = await supabase.from("members").select("passes_left").eq("id", item.memberId).single();
-          const left = (data as { passes_left: number | null } | null)?.passes_left ?? null;
-          if (left !== null) await supabase.from("members").update({ passes_left: Math.max(0, left - 1) }).eq("id", item.memberId);
-        }
+        if (item.passConsumed) await supabase.rpc("consume_pass", { p_member_id: item.memberId }); // descuento atómico
       } catch {
         remaining.push(item); // sigue pendiente para el próximo intento
       }
@@ -312,6 +307,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
+    clearSnapshot(); // no dejar socios/PIN en el localStorage de un dispositivo compartido
   }, [supabase]);
 
   const updateSettings = useCallback(
@@ -498,7 +494,10 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         return { level: "red", title: "PIN no encontrado", sub: "Verificá el PIN e intentá nuevamente", initials: "?" };
       }
       const pre = statusOf(member, settings.locale);
-      if (pre.level === "danger") {
+      // Solo se rechaza al socio vencido / sin pases si el gimnasio tiene activado
+      // "Bloquear acceso a vencidos" (settings.blockExpired). Si está desactivado, se
+      // permite el ingreso igual (queda registrado, más abajo se marca en ámbar).
+      if (pre.level === "danger" && settings.blockExpired) {
         return {
           level: "red",
           title: member.planType === "tiempo" ? "Membresía vencida" : "Sin pases disponibles",
@@ -544,7 +543,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         if (isOnline) {
           try {
             await supabase.from("checkins").insert({ gym_id: gymId, member_id: member.id, checked_at: checkedAt, result: "permitido", pass_consumed: isPases });
-            if (isPases) await supabase.from("members").update({ passes_left: updated.passesLeft }).eq("id", member.id);
+            if (isPases) await supabase.rpc("consume_pass", { p_member_id: member.id }); // descuento atómico
             wrote = true;
           } catch {
             wrote = false;
@@ -556,8 +555,10 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      // Verde solo si queda "al día"; si entró vencido/por-vencer (p. ej. con el bloqueo
+      // desactivado), se muestra en ámbar como aviso.
       const post = statusOf(updated, settings.locale);
-      const level = post.level === "warn" ? "amber" : "green";
+      const level = post.level === "ok" ? "green" : "amber";
       const sub = isPases
         ? `Te quedan ${updated.passesLeft} pase(s)`
         : `Válido hasta ${new Date(updated.dueDate! + "T00:00:00").toLocaleDateString(settings.locale, { day: "2-digit", month: "2-digit", year: "numeric" })}`;
@@ -567,16 +568,15 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   );
 
   const statusFor = useCallback((m: Member) => statusOf(m, settings.locale), [settings.locale]);
-  const memberById = useCallback((id: string) => members.find((m) => m.id === id), [members]);
 
   const value = useMemo<GymCtx>(
     () => ({
       hydrated, authed: !!user, hasGym: !!gymId, members, plans, settings, search, modal, online, pendingCount,
       login, logout, setSearch, updateSettings,
       openAddMember, openEditMember, openPayment, openAddPlan, openEditPlan, closeModal,
-      addMember, editMember, importMembers, registerPayment, savePlan, deletePlan, findByPin, checkin, statusFor, memberById,
+      addMember, editMember, importMembers, registerPayment, savePlan, deletePlan, findByPin, checkin, statusFor,
     }),
-    [hydrated, user, gymId, members, plans, settings, search, modal, online, pendingCount, login, logout, updateSettings, openAddMember, openEditMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, editMember, importMembers, registerPayment, savePlan, deletePlan, findByPin, checkin, statusFor, memberById],
+    [hydrated, user, gymId, members, plans, settings, search, modal, online, pendingCount, login, logout, updateSettings, openAddMember, openEditMember, openPayment, openAddPlan, openEditPlan, closeModal, addMember, editMember, importMembers, registerPayment, savePlan, deletePlan, findByPin, checkin, statusFor],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
