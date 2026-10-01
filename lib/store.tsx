@@ -30,8 +30,6 @@ export type ModalState =
 
 export interface EditMemberInput {
   name: string;
-  email: string;
-  phone: string;
   pin: string;
 }
 
@@ -46,10 +44,10 @@ export interface CheckinResult {
 
 export interface NewMemberInput {
   name: string;
-  email: string;
-  phone: string;
-  planId: string;
   pin: string;
+  // Si viene, se registra el cobro junto con el alta (el plan se activa con el pago).
+  // Si no, el socio queda "Sin plan" hasta que se le registre un pago.
+  charge?: { planId: string; method: PaymentMethod };
 }
 
 export interface PlanFormInput {
@@ -63,8 +61,6 @@ export interface PlanFormInput {
 
 export interface ImportRow {
   name: string;
-  email?: string;
-  phone?: string;
   plan?: string;
   pin?: string;
 }
@@ -72,7 +68,7 @@ export interface ImportRow {
 // --- DB row shapes ---
 interface GymRow { id: string; name: string; currency: string; locale: string; block_expired: boolean; subscription_status?: "trial" | "active" | "suspended"; paid_until?: string | null }
 interface PlanRow { id: string; type: PlanType; name: string; duration_months: number | null; pass_count: number | null; validity_days: number | null; price: number }
-interface MemberRow { id: string; name: string; email: string | null; phone: string | null; pin: string; plan_type: PlanType | null; plan_name: string | null; due_date: string | null; passes_total: number | null; passes_left: number | null }
+interface MemberRow { id: string; name: string; pin: string; plan_type: PlanType | null; plan_name: string | null; due_date: string | null; passes_total: number | null; passes_left: number | null }
 interface PaymentRow { id: string; member_id: string; amount: number; method: PaymentMethod; plan_name: string | null; paid_at: string }
 interface CheckinRow { member_id: string; checked_at: string; result: string }
 
@@ -100,10 +96,10 @@ interface GymCtx {
   openEditPlan: (planId: string) => void;
   closeModal: () => void;
 
-  addMember: (input: NewMemberInput) => Promise<void>;
+  addMember: (input: NewMemberInput) => Promise<{ error?: string }>;
   editMember: (memberId: string, patch: EditMemberInput) => Promise<void>;
   importMembers: (rows: ImportRow[], defaultPlanId: string) => Promise<{ created: number; errors: string[] }>;
-  registerPayment: (memberId: string, planId: string, method: PaymentMethod) => Promise<void>;
+  registerPayment: (memberId: string, planId: string, method: PaymentMethod) => Promise<{ error?: string }>;
   savePlan: (form: PlanFormInput, editingId?: string) => Promise<void>;
   deletePlan: (planId: string) => Promise<void>;
   findByPin: (pin: string) => Member | undefined;
@@ -204,8 +200,6 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     const membersMapped: Member[] = ((memberRows as MemberRow[]) ?? []).map((r) => ({
       id: r.id,
       name: r.name,
-      email: r.email ?? "",
-      phone: r.phone ?? "",
       pin: r.pin,
       planType: (r.plan_type ?? "tiempo") as PlanType,
       planName: r.plan_name ?? "",
@@ -331,33 +325,60 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   const openEditPlan = useCallback((planId: string) => setModal({ type: "plan", planId }), []);
   const closeModal = useCallback(() => setModal(null), []);
 
-  const addMember = useCallback(
-    async (input: NewMemberInput) => {
-      if (!input.name.trim() || !gymId) return;
-      const plan = plans.find((p) => p.id === input.planId);
-      if (!plan) return;
-      const row: Record<string, unknown> = {
+  // Registra el cobro y activa el plan del socio (vencimiento o pases). Es la vía por la que
+  // un socio obtiene plan al darlo de alta o renovarlo, así cada plan activo tiene su pago
+  // y los ingresos aparecen en reportes. Devuelve el mensaje de error, o null si salió bien.
+  const applyPayment = useCallback(
+    async (memberId: string, plan: Plan, method: PaymentMethod): Promise<string | null> => {
+      if (!gymId) return "Sin gimnasio.";
+      const { error: payErr } = await supabase.from("payments").insert({
         gym_id: gymId,
-        name: input.name.trim(),
-        email: input.email || null,
-        phone: input.phone || null,
-        pin: input.pin,
-        plan_type: plan.type,
+        member_id: memberId,
+        amount: plan.price,
+        method,
         plan_name: plan.name,
-      };
-      if (plan.type === "tiempo") row.due_date = addMonths(REFERENCE_TODAY, plan.duration ?? 1);
-      else {
-        row.passes_total = plan.passCount;
-        row.passes_left = plan.passCount;
-      }
-      await supabase.from("members").insert(row);
-      await loadAll();
-      setModal(null);
+        paid_at: toISO(REFERENCE_TODAY),
+      });
+      if (payErr) return payErr.message;
+      const update: Record<string, unknown> =
+        plan.type === "tiempo"
+          ? { plan_type: "tiempo", plan_name: plan.name, due_date: addMonths(REFERENCE_TODAY, plan.duration ?? 1), passes_total: null, passes_left: null }
+          : { plan_type: "pases", plan_name: plan.name, passes_total: plan.passCount, passes_left: plan.passCount, due_date: null };
+      const { error: updErr } = await supabase.from("members").update(update).eq("id", memberId);
+      return updErr ? updErr.message : null;
     },
-    [supabase, gymId, plans, loadAll],
+    [supabase, gymId],
   );
 
-  // Editar datos de contacto y PIN. El plan/vencimiento/pases se gestionan por pagos.
+  // Alta de socio: solo nombre + PIN. Si viene `charge`, se registra el cobro en el mismo
+  // paso y el plan se activa con él; si no, el socio queda "Sin plan" hasta cobrarle.
+  const addMember = useCallback(
+    async (input: NewMemberInput): Promise<{ error?: string }> => {
+      if (!input.name.trim() || !gymId) return { error: "Falta el nombre del socio." };
+      const plan = input.charge ? plans.find((p) => p.id === input.charge!.planId) : undefined;
+      if (input.charge && !plan) return { error: "Elegí un plan para registrar el cobro." };
+
+      const { data, error } = await supabase
+        .from("members")
+        .insert({ gym_id: gymId, name: input.name.trim(), pin: input.pin })
+        .select("id")
+        .single();
+      if (error || !data) {
+        return { error: error?.code === "23505" ? "Ese PIN ya lo usa otro socio. Elegí otro." : "No se pudo guardar el socio. Probá de nuevo." };
+      }
+
+      const payError = plan && input.charge ? await applyPayment((data as { id: string }).id, plan, input.charge.method) : null;
+      await loadAll();
+      if (payError) {
+        return { error: `El socio se creó, pero no se pudo registrar el cobro (${payError}). Cerrá esta ventana y registralo desde su ficha.` };
+      }
+      setModal(null);
+      return {};
+    },
+    [supabase, gymId, plans, loadAll, applyPayment],
+  );
+
+  // Editar nombre y PIN. El plan/vencimiento/pases se gestionan por pagos.
   const editMember = useCallback(
     async (memberId: string, patch: EditMemberInput) => {
       if (!gymId || !patch.name.trim()) return;
@@ -365,8 +386,6 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         .from("members")
         .update({
           name: patch.name.trim(),
-          email: patch.email.trim() || null,
-          phone: patch.phone.trim() || null,
           pin: patch.pin,
         })
         .eq("id", memberId);
@@ -404,26 +423,27 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
           errors.push(`Fila ${i + 1}: sin nombre, se omitió.`);
           return;
         }
-        const plan =
-          (r.plan && plans.find((p) => p.name.toLowerCase() === r.plan!.trim().toLowerCase())) ||
-          plans.find((p) => p.id === defaultPlanId);
-        if (!plan) {
-          errors.push(`Fila ${i + 1} (${name}): plan no encontrado, se omitió.`);
-          return;
+        // El plan es opcional: sin plan (ni en la fila ni por defecto) el socio entra "Sin plan"
+        // y se le registra el cobro después. Con plan, queda activo SIN registrar un pago (para
+        // cargar socios que ya habían pagado antes de usar Cuotafit); no suma a reportes.
+        const planByName = r.plan ? plans.find((p) => p.name.toLowerCase() === r.plan!.trim().toLowerCase()) : undefined;
+        if (r.plan && r.plan.trim() && !planByName && !defaultPlanId) {
+          errors.push(`Fila ${i + 1} (${name}): el plan "${r.plan.trim()}" no existe, quedó sin plan.`);
         }
+        const plan = planByName ?? plans.find((p) => p.id === defaultPlanId);
         const base: Record<string, unknown> = {
           gym_id: gymId,
           name,
-          email: (r.email ?? "").trim() || null,
-          phone: (r.phone ?? "").trim() || null,
           pin: uniquePin(r.pin),
-          plan_type: plan.type,
-          plan_name: plan.name,
         };
-        if (plan.type === "tiempo") base.due_date = addMonths(REFERENCE_TODAY, plan.duration ?? 1);
-        else {
-          base.passes_total = plan.passCount;
-          base.passes_left = plan.passCount;
+        if (plan) {
+          base.plan_type = plan.type;
+          base.plan_name = plan.name;
+          if (plan.type === "tiempo") base.due_date = addMonths(REFERENCE_TODAY, plan.duration ?? 1);
+          else {
+            base.passes_total = plan.passCount;
+            base.passes_left = plan.passCount;
+          }
         }
         toInsert.push(base);
       });
@@ -438,27 +458,16 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   );
 
   const registerPayment = useCallback(
-    async (memberId: string, planId: string, method: PaymentMethod) => {
-      if (!gymId) return;
+    async (memberId: string, planId: string, method: PaymentMethod): Promise<{ error?: string }> => {
       const plan = plans.find((p) => p.id === planId);
-      if (!plan) return;
-      await supabase.from("payments").insert({
-        gym_id: gymId,
-        member_id: memberId,
-        amount: plan.price,
-        method,
-        plan_name: plan.name,
-        paid_at: toISO(REFERENCE_TODAY),
-      });
-      const update: Record<string, unknown> =
-        plan.type === "tiempo"
-          ? { plan_type: "tiempo", plan_name: plan.name, due_date: addMonths(REFERENCE_TODAY, plan.duration ?? 1), passes_total: null, passes_left: null }
-          : { plan_type: "pases", plan_name: plan.name, passes_total: plan.passCount, passes_left: plan.passCount, due_date: null };
-      await supabase.from("members").update(update).eq("id", memberId);
+      if (!plan) return { error: "Elegí un plan." };
+      const err = await applyPayment(memberId, plan, method);
       await loadAll();
+      if (err) return { error: `No se pudo registrar el pago (${err}).` };
       setModal(null);
+      return {};
     },
-    [supabase, gymId, plans, loadAll],
+    [plans, loadAll, applyPayment],
   );
 
   const savePlan = useCallback(
@@ -500,7 +509,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       if (pre.level === "danger" && settings.blockExpired) {
         return {
           level: "red",
-          title: member.planType === "tiempo" ? "Membresía vencida" : "Sin pases disponibles",
+          title: !member.planName ? "Sin plan activo" : member.planType === "tiempo" ? "Membresía vencida" : "Sin pases disponibles",
           sub: pre.sub,
           name: member.name,
           initials: initials(member.name),
@@ -559,7 +568,9 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       // desactivado), se muestra en ámbar como aviso.
       const post = statusOf(updated, settings.locale);
       const level = post.level === "ok" ? "green" : "amber";
-      const sub = isPases
+      const sub = !updated.planName
+        ? "Todavía no registraste tu pago"
+        : isPases
         ? `Te quedan ${updated.passesLeft} pase(s)`
         : `Válido hasta ${new Date(updated.dueDate! + "T00:00:00").toLocaleDateString(settings.locale, { day: "2-digit", month: "2-digit", year: "numeric" })}`;
       return { level, title: "Acceso permitido", sub, name: member.name, initials: initials(member.name), member: updated };

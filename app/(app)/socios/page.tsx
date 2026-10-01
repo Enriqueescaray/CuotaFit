@@ -34,21 +34,23 @@ function parseCSV(text: string): ImportRow[] {
   };
 
   const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  // Se siguen reconociendo email/telefono como encabezados para que un CSV viejo con esas
+  // columnas siga detectándose bien; simplemente se ignoran (ya no se guardan).
   const known = ["nombre", "name", "email", "correo", "telefono", "phone", "celular", "plan", "pin"];
   const header = parseLine(lines[0]).map(norm);
   const hasHeader = header.some((h) => known.includes(h));
   const colOf = (names: string[]) => header.findIndex((h) => names.includes(h));
 
   const idx = hasHeader
-    ? { name: colOf(["nombre", "name"]), email: colOf(["email", "correo"]), phone: colOf(["telefono", "phone", "celular"]), plan: colOf(["plan"]), pin: colOf(["pin"]) }
-    : { name: 0, email: 1, phone: 2, plan: 3, pin: 4 };
+    ? { name: colOf(["nombre", "name"]), plan: colOf(["plan"]), pin: colOf(["pin"]) }
+    : { name: 0, plan: 1, pin: 2 };
 
   const dataLines = hasHeader ? lines.slice(1) : lines;
   return dataLines
     .map((l) => {
       const c = parseLine(l);
       const g = (i: number) => (i >= 0 && i < c.length ? c[i] : "");
-      return { name: g(idx.name), email: g(idx.email), phone: g(idx.phone), plan: g(idx.plan), pin: g(idx.pin) } as ImportRow;
+      return { name: g(idx.name), plan: g(idx.plan), pin: g(idx.pin) } as ImportRow;
     })
     .filter((r) => r.name);
 }
@@ -69,7 +71,9 @@ export default function SociosPage() {
 
   const q = search.trim().toLowerCase();
   const filtered = members.filter((m) => !q || m.name.toLowerCase().includes(q) || m.pin.includes(q));
-  const planId = importPlanId || plans[0]?.id || "";
+  // "" = importar sin plan (se cobra después). Es la opción por defecto: un plan acá deja
+  // al socio activo sin registrar ningún pago.
+  const planId = importPlanId;
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -82,7 +86,7 @@ export default function SociosPage() {
   }
 
   function downloadTemplate() {
-    const csv = "nombre,email,telefono,plan\nAna Pérez,ana@mail.com,+52 55 1234 5678,Mensual\nLuis Gómez,,,\n";
+    const csv = "nombre,plan\nAna Pérez,Mensual\nLuis Gómez,\n";
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -121,7 +125,7 @@ export default function SociosPage() {
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 22, marginBottom: 18 }}>
           <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Importar socios desde CSV</div>
           <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
-            Columnas: <b>nombre</b>, email, telefono, plan (opcional). Si no ponés plan en una fila, se usa el plan por defecto.{" "}
+            Columnas: <b>nombre</b> y plan (opcional). Los socios que importes <b>sin plan</b> quedan pendientes de cobro. Si les asignás un plan, quedan activos <b>sin registrar pago</b> (sirve para cargar socios que ya habían pagado antes).{" "}
             <span onClick={downloadTemplate} style={{ color: "var(--primary)", fontWeight: 600, cursor: "pointer" }}>Descargar plantilla</span>
           </div>
 
@@ -133,12 +137,13 @@ export default function SociosPage() {
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Plan por defecto</div>
               <select value={planId} onChange={(e) => setImportPlanId(e.target.value)} style={{ padding: "11px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 14 }}>
+                <option value="">Sin plan (se cobra después)</option>
                 {plans.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
             </div>
-            <button onClick={doImport} disabled={importing || rows.length === 0 || !planId} style={{ ...btnPrimary, opacity: importing || rows.length === 0 || !planId ? 0.6 : 1 }}>
+            <button onClick={doImport} disabled={importing || rows.length === 0} style={{ ...btnPrimary, opacity: importing || rows.length === 0 ? 0.6 : 1 }}>
               {importing ? "Importando…" : `Importar ${rows.length} socio${rows.length === 1 ? "" : "s"}`}
             </button>
           </div>
@@ -171,7 +176,7 @@ export default function SociosPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 14 }}>
         {filtered.map((m) => {
           const status = statusFor(m);
-          const planTypeLabel = m.planType === "tiempo" ? "Mensual" : "Pases";
+          const planTypeLabel = !m.planName ? "Sin plan" : m.planType === "tiempo" ? "Mensual" : "Pases";
           return (
             <div key={m.id} onClick={() => router.push(`/socios/${m.id}`)} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 18, cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>

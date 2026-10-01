@@ -14,7 +14,7 @@
 | **Cobros y morosidad** | Registro de pagos (efectivo/transferencia/tarjeta), dashboard de socios por vencer / vencidos / con pocos pases, reporte de ingresos. |
 | **Control de acceso por PIN** | Pantalla de **check‑in** tipo kiosco: el socio ingresa su PIN → verde "Acceso permitido" (con pases restantes o fecha de vencimiento), amarillo (por vencer / pocos pases) o rojo (vencido / sin pases). Cada check‑in **descuenta un pase** (si aplica) y **registra la asistencia del día**. |
 | **Check‑in offline (PWA)** | La app es instalable y el kiosco funciona **sin internet**: valida contra un snapshot local, encola los check‑ins y los sincroniza al volver la conexión (`lib/offline.ts`, `public/sw.js`). |
-| **Importación por CSV** | Alta masiva de socios desde `/socios` (columnas nombre/email/teléfono/plan; PIN único autogenerado). |
+| **Importación por CSV** | Alta masiva de socios desde `/socios` (columnas nombre/plan; PIN único autogenerado; sin plan = pendiente de cobro). |
 | **Asistencias** | Calendario mensual por socio y del gimnasio, derivado de los check‑ins. |
 | **Planes** | Crear, editar y eliminar planes (por tiempo o por pases). |
 | **Reportes** | Ingresos por mes y pagos recientes. |

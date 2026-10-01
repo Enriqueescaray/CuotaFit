@@ -86,46 +86,124 @@ function ModalCard({ children }: { children: React.ReactNode }) {
   );
 }
 
+const METHODS: PaymentMethod[] = ["Efectivo", "Transferencia"];
+
+// Pestañas de dos opciones (mismo estilo que el selector de tipo de plan).
+function Segmented<T extends string | boolean>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <div key={String(o.value)} onClick={() => onChange(o.value)} style={{ flex: 1, textAlign: "center", padding: 10, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", border: `1px solid ${on ? "var(--primary)" : "var(--border)"}`, background: on ? "var(--primary-soft)" : "var(--surface)", color: on ? "var(--primary)" : "var(--text)" }}>
+            {o.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Plan + monto + método + resultado. Lo comparten "Agregar socio" (cobro en el alta)
+// y "Registrar pago", para que el cobro se vea y se comporte igual en ambos.
+function PaymentFields({ planId, onPlan, method, onMethod, planLabel }: { planId: string; onPlan: (id: string) => void; method: PaymentMethod; onMethod: (m: PaymentMethod) => void; planLabel: string }) {
+  const { plans, settings } = useGym();
+  const plan = plans.find((p) => p.id === planId) ?? plans[0];
+  const resultLabel = plan
+    ? plan.type === "tiempo"
+      ? `Vence el ${fmtDate(addMonths(REFERENCE_TODAY, plan.duration ?? 1), settings.locale)}`
+      : `Se cargan ${plan.passCount} pases`
+    : "";
+
+  return (
+    <>
+      <div>
+        <div style={labelStyle}>{planLabel}</div>
+        <select value={planId} onChange={(e) => onPlan(e.target.value)} style={inputStyle}>
+          {plans.map((p) => (
+            <option key={p.id} value={p.id}>{planOptionLabel(p, settings)}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <div style={labelStyle}>Monto</div>
+        <input value={fmtMoney(plan?.price ?? 0, settings)} readOnly style={{ ...inputStyle, background: "var(--surface-alt)", fontSize: 16, fontWeight: 700 }} />
+      </div>
+      <div>
+        <div style={{ ...labelStyle, marginBottom: 8 }}>Método de pago</div>
+        <Segmented options={METHODS.map((m) => ({ value: m, label: m }))} value={method} onChange={onMethod} />
+      </div>
+      <div style={{ background: "var(--surface-alt)", borderRadius: 12, padding: 14 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>Resultado</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{resultLabel}</div>
+      </div>
+    </>
+  );
+}
+
+function ErrorNote({ message }: { message: string | null }) {
+  if (!message) return null;
+  return <div style={{ fontSize: 13, fontWeight: 600, color: "var(--red)", background: "var(--red-soft)", borderRadius: 10, padding: "10px 12px" }}>{message}</div>;
+}
+
+// Alta de socio: solo el nombre. El plan se activa al registrar el cobro, así que acá se
+// pregunta si ya pagó; si sí, el socio y su pago se crean juntos (y suman a reportes).
 function AddMemberForm() {
-  const { plans, settings, members, addMember, closeModal } = useGym();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", planId: plans[0]?.id ?? "", pin: genPin() });
+  const { plans, members, addMember, closeModal } = useGym();
+  const [name, setName] = useState("");
+  const [pin, setPin] = useState(genPin());
+  const [paidNow, setPaidNow] = useState(plans.length > 0);
+  const [planId, setPlanId] = useState(plans[0]?.id ?? "");
+  const [method, setMethod] = useState<PaymentMethod>("Efectivo");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [field]: e.target.value }));
+  const canSave = name.trim().length > 0 && pinIsValid(pin, members) && (!paidNow || !!planId) && !saving;
 
-  const canSave = form.name.trim().length > 0 && pinIsValid(form.pin, members);
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    const res = await addMember({ name, pin, charge: paidNow ? { planId, method } : undefined });
+    setSaving(false);
+    if (res.error) setError(res.error);
+  }
 
   return (
     <>
       <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>Agregar socio</div>
-      <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>Completá los datos y el plan inicial</div>
+      <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>Solo el nombre. El plan se activa cuando se registra el pago.</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <div style={labelStyle}>Nombre completo</div>
-          <input value={form.name} onChange={set("name")} placeholder="Ej. Ana Pérez" style={inputStyle} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <div style={labelStyle}>Email</div>
-            <input value={form.email} onChange={set("email")} placeholder="correo@mail.com" style={inputStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>Teléfono</div>
-            <input value={form.phone} onChange={set("phone")} placeholder="+52 55..." style={inputStyle} />
-          </div>
+          <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !paidNow && save()} placeholder="Ej. Ana Pérez" autoFocus style={inputStyle} />
         </div>
         <div>
-          <div style={labelStyle}>Plan</div>
-          <select value={form.planId} onChange={set("planId")} style={inputStyle}>
-            {plans.map((p) => (
-              <option key={p.id} value={p.id}>{planOptionLabel(p, settings)}</option>
-            ))}
-          </select>
+          <div style={{ ...labelStyle, marginBottom: 8 }}>¿Ya pagó?</div>
+          <Segmented
+            options={[
+              { value: true, label: "Sí, registrar pago" },
+              { value: false, label: "Todavía no" },
+            ]}
+            value={paidNow}
+            onChange={(v) => setPaidNow(v && plans.length > 0)}
+          />
+          {plans.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>Todavía no hay planes cargados: creá uno en “Planes” para poder cobrar.</div>}
         </div>
-        <PinField value={form.pin} onChange={(pin) => setForm((f) => ({ ...f, pin }))} error={pinError(form.pin, members)} />
+        {paidNow ? (
+          <PaymentFields planId={planId} onPlan={setPlanId} method={method} onMethod={setMethod} planLabel="Plan que contrata" />
+        ) : (
+          <div style={{ background: "var(--surface-alt)", borderRadius: 12, padding: 14, fontSize: 13, color: "var(--text-muted)" }}>
+            El socio queda <b style={{ color: "var(--text)" }}>sin plan</b> y no se registra ningún cobro. Cuando pague, usá “Cobrar” (en el dashboard o en su ficha) y ahí se elige el plan.
+          </div>
+        )}
+        <PinField value={pin} onChange={setPin} error={pinError(pin, members)} />
+        <ErrorNote message={error} />
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
           <button onClick={closeModal} style={ghostBtn}>Cancelar</button>
-          <button onClick={() => canSave && addMember(form)} disabled={!canSave} style={{ ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" }}>Guardar socio</button>
+          <button onClick={save} disabled={!canSave} style={{ ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" }}>
+            {saving ? "Guardando…" : paidNow ? "Guardar y cobrar" : "Guardar socio"}
+          </button>
         </div>
       </div>
     </>
@@ -137,8 +215,6 @@ function EditMemberForm({ memberId }: { memberId: string }) {
   const member = members.find((m) => m.id === memberId);
   const [form, setForm] = useState({
     name: member?.name ?? "",
-    email: member?.email ?? "",
-    phone: member?.phone ?? "",
     pin: member?.pin ?? "",
   });
 
@@ -158,16 +234,6 @@ function EditMemberForm({ memberId }: { memberId: string }) {
           <div style={labelStyle}>Nombre completo</div>
           <input value={form.name} onChange={set("name")} placeholder="Ej. Ana Pérez" style={inputStyle} />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <div style={labelStyle}>Email</div>
-            <input value={form.email} onChange={set("email")} placeholder="correo@mail.com" style={inputStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>Teléfono</div>
-            <input value={form.phone} onChange={set("phone")} placeholder="+52 55..." style={inputStyle} />
-          </div>
-        </div>
         <PinField value={form.pin} onChange={(pin) => setForm((f) => ({ ...f, pin }))} error={pinError(form.pin, members, memberId)} />
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
           <button onClick={closeModal} style={ghostBtn}>Cancelar</button>
@@ -179,56 +245,36 @@ function EditMemberForm({ memberId }: { memberId: string }) {
 }
 
 function PaymentForm({ memberId }: { memberId: string }) {
-  const { members, plans, settings, registerPayment, closeModal } = useGym();
+  const { members, plans, registerPayment, closeModal } = useGym();
   const member = members.find((m) => m.id === memberId);
   const initialPlan = plans.find((p) => p.name === member?.planName) ?? plans[0];
   const [planId, setPlanId] = useState(initialPlan?.id ?? "");
   const [method, setMethod] = useState<PaymentMethod>("Efectivo");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const plan = plans.find((p) => p.id === planId) ?? plans[0];
-  const resultLabel = plan
-    ? plan.type === "tiempo"
-      ? `Nueva fecha de vencimiento: ${fmtDate(addMonths(REFERENCE_TODAY, plan.duration ?? 1), settings.locale)}`
-      : `Se recargan ${plan.passCount} pases`
-    : "";
+  const canSave = !!planId && !saving;
+
+  // `saving` evita que un doble clic registre el mismo pago dos veces.
+  async function confirm() {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    const res = await registerPayment(memberId, planId, method);
+    setSaving(false);
+    if (res.error) setError(res.error);
+  }
 
   return (
     <>
       <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>Registrar pago</div>
       <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>{member?.name}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div>
-          <div style={labelStyle}>Plan a renovar</div>
-          <select value={planId} onChange={(e) => setPlanId(e.target.value)} style={inputStyle}>
-            {plans.map((p) => (
-              <option key={p.id} value={p.id}>{planOptionLabel(p, settings)}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <div style={labelStyle}>Monto</div>
-          <input value={fmtMoney(plan?.price ?? 0, settings)} readOnly style={{ ...inputStyle, background: "var(--surface-alt)", fontSize: 16, fontWeight: 700 }} />
-        </div>
-        <div>
-          <div style={{ ...labelStyle, marginBottom: 8 }}>Método de pago</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {(["Efectivo", "Transferencia"] as PaymentMethod[]).map((pm) => {
-              const on = method === pm;
-              return (
-                <div key={pm} onClick={() => setMethod(pm)} style={{ flex: 1, textAlign: "center", padding: 10, borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", border: `1px solid ${on ? "var(--primary)" : "var(--border)"}`, background: on ? "var(--primary-soft)" : "var(--surface)", color: on ? "var(--primary)" : "var(--text)" }}>
-                  {pm}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <div style={{ background: "var(--surface-alt)", borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>Resultado</div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>{resultLabel}</div>
-        </div>
+        <PaymentFields planId={planId} onPlan={setPlanId} method={method} onMethod={setMethod} planLabel={member?.planName ? "Plan a renovar" : "Plan que contrata"} />
+        <ErrorNote message={error} />
         <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
           <button onClick={closeModal} style={ghostBtn}>Cancelar</button>
-          <button onClick={() => registerPayment(memberId, planId, method)} style={primaryBtn}>Confirmar pago</button>
+          <button onClick={confirm} disabled={!canSave} style={{ ...primaryBtn, opacity: canSave ? 1 : 0.5, cursor: canSave ? "pointer" : "not-allowed" }}>{saving ? "Registrando…" : "Confirmar pago"}</button>
         </div>
       </div>
     </>

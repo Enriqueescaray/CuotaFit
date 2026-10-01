@@ -26,10 +26,8 @@ export interface Payment {
 export interface Member {
   id: string;
   name: string;
-  email: string;
-  phone: string;
   planType: PlanType;
-  planName: string;
+  planName: string; // vacío = sin plan activo (todavía no se registró ningún cobro)
   dueDate?: string; // ISO, for "tiempo" plans
   passesTotal?: number; // for "pases" plans
   passesLeft?: number; // for "pases" plans
@@ -163,20 +161,30 @@ export function subscriptionBlock(
   };
 }
 
+// "Por vencer": a lo sumo 3 días para el vencimiento (plan por tiempo) o 3 pases restantes
+// (plan por pases). Un solo lugar para que dashboard, lista y check-in usen el mismo criterio.
+export const EXPIRING_DAYS = 3;
+export const EXPIRING_PASSES = 3;
+
 export function statusOf(m: Member, locale = "es-AR", today: Date = REFERENCE_TODAY): MemberStatus {
+  // Socio dado de alta sin cobro: no tiene plan hasta que se registre su pago.
+  if (!m.planName)
+    return { level: "danger", label: "Sin plan", sub: "Registrá su pago para activar el plan", bg: "var(--red-soft)", color: "var(--red)" };
   if (m.planType === "tiempo") {
     const diff = daysDiff(m.dueDate!, today);
     if (diff < 0)
       return { level: "danger", label: "Vencido", sub: `Venció hace ${-diff} día(s)`, bg: "var(--red-soft)", color: "var(--red)" };
-    if (diff <= 5)
-      return { level: "warn", label: "Por vencer", sub: `Vence en ${diff} día(s)`, bg: "var(--amber-soft)", color: "var(--amber)" };
+    if (diff <= EXPIRING_DAYS) {
+      const when = diff === 0 ? "Vence hoy" : diff === 1 ? "Vence mañana" : `Vence en ${diff} días`;
+      return { level: "warn", label: "Por vencer", sub: when, bg: "var(--amber-soft)", color: "var(--amber)" };
+    }
     return { level: "ok", label: "Al día", sub: `Vence el ${fmtDate(m.dueDate!, locale)}`, bg: "var(--green-soft)", color: "var(--green)" };
   }
   const left = m.passesLeft ?? 0;
   if (left <= 0)
     return { level: "danger", label: "Sin pases", sub: "Sin pases disponibles", bg: "var(--red-soft)", color: "var(--red)" };
-  if (left <= 1)
-    return { level: "warn", label: "Pocos pases", sub: `${left} pase restante`, bg: "var(--amber-soft)", color: "var(--amber)" };
+  if (left <= EXPIRING_PASSES)
+    return { level: "warn", label: "Pocos pases", sub: left === 1 ? "Le queda 1 pase" : `Le quedan ${left} pases`, bg: "var(--amber-soft)", color: "var(--amber)" };
   return { level: "ok", label: "Al día", sub: `${left} de ${m.passesTotal} pases`, bg: "var(--green-soft)", color: "var(--green)" };
 }
 

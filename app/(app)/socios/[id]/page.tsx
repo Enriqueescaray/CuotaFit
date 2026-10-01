@@ -20,6 +20,7 @@ export default function MemberDetailPage() {
   }
 
   const status = statusFor(m);
+  const hasPlan = !!m.planName;
   const passesPct = m.passesTotal ? `${Math.round(((m.passesLeft ?? 0) / m.passesTotal) * 100)}%` : "0%";
   const cells = buildMonthGrid();
 
@@ -33,8 +34,6 @@ export default function MemberDetailPage() {
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 22, textAlign: "center" }}>
             <div style={{ width: 76, height: 76, borderRadius: "50%", background: "var(--primary-soft)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 26, margin: "0 auto 14px" }}>{initials(m.name)}</div>
             <div style={{ fontSize: 19, fontWeight: 800 }}>{m.name}</div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>{m.email}</div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{m.phone}</div>
             <div style={{ fontSize: 11, fontWeight: 700, padding: "5px 12px", borderRadius: 20, background: status.bg, color: status.color, display: "inline-block", marginTop: 12 }}>{status.label}</div>
 
             <div style={{ background: "var(--surface-alt)", borderRadius: 12, padding: 14, marginTop: 18 }}>
@@ -46,8 +45,13 @@ export default function MemberDetailPage() {
           </div>
 
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", marginBottom: 10 }}>{m.planType === "tiempo" ? "Mensual" : "Pases"} · {m.planName}</div>
-            {m.planType === "tiempo" ? (
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)", marginBottom: 10 }}>{hasPlan ? `${m.planType === "tiempo" ? "Mensual" : "Pases"} · ${m.planName}` : "Plan"}</div>
+            {!hasPlan ? (
+              <>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>Sin plan</div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>Se activa al registrar su primer pago</div>
+              </>
+            ) : m.planType === "tiempo" ? (
               <>
                 <div style={{ fontSize: 22, fontWeight: 800 }}>{fmtDate(m.dueDate!, settings.locale)}</div>
                 <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>Fecha de vencimiento</div>
@@ -65,13 +69,14 @@ export default function MemberDetailPage() {
             )}
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
               <button onClick={() => openPayment(m.id)} style={{ flex: 1, background: "var(--primary)", color: "#fff", border: "none", borderRadius: 10, padding: 11, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Registrar pago</button>
-              <button onClick={() => openPayment(m.id)} style={{ flex: 1, background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: 11, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Renovar</button>
+              {hasPlan && <button onClick={() => openPayment(m.id)} style={{ flex: 1, background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: 11, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Renovar</button>}
             </div>
           </div>
 
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 20 }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Historial de pagos</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {m.payments.length === 0 && <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Todavía no hay pagos registrados.</div>}
               {m.payments.map((p, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingBottom: 10, borderBottom: "1px solid var(--border)" }}>
                   <div>
