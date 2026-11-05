@@ -119,7 +119,7 @@ npm run dev      # http://localhost:3000
 ```
 Rutas: `/login`, el panel del gimnasio en `/dashboard`, y el panel de super‑admin en `/admin`.
 
-**Recuperar contraseña** (`/recuperar` → mail → `/nueva-contrasena`): sin SMTP propio, Supabase solo le manda mails a los miembros de la organización y hasta 2 por hora. Para que les llegue a los clientes hay que activar **Authentication → Emails → SMTP Settings**. Mientras tanto, la contraseña se restablece desde `/admin`.
+**Recuperar contraseña:** `/recuperar` lleva al WhatsApp de soporte (`lib/contact.ts`) y la contraseña se restablece a mano desde `/admin`. No se usa mail porque, sin SMTP propio, Supabase solo le escribe a los miembros de la organización.
 
 ### 5. Producción
 ```bash

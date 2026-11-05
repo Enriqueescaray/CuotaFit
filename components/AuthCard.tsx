@@ -1,6 +1,6 @@
 import { LogoMark, Wordmark } from "@/components/Logo";
 
-// Marco de las pantallas públicas de cuenta (recuperar y cambiar contraseña).
+// Marco de las pantallas públicas de cuenta.
 export function AuthCard({
   title,
   subtitle,
@@ -29,26 +29,6 @@ export function AuthCard({
     </div>
   );
 }
-
-export function AuthError({ children }: { children: React.ReactNode }) {
-  return (
-    <div role="alert" style={{ fontSize: 13, color: "var(--red)", background: "var(--red-soft)", borderRadius: 8, padding: "8px 12px" }}>
-      {children}
-    </div>
-  );
-}
-
-export const authLabelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6 };
-
-export const authInputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "12px 14px",
-  borderRadius: 10,
-  border: "1px solid var(--border)",
-  background: "var(--surface-alt)",
-  color: "var(--text)",
-  fontSize: 14,
-};
 
 export const authButtonStyle: React.CSSProperties = {
   width: "100%",

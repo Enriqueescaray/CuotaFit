@@ -19,8 +19,5 @@ export async function GET(request: Request) {
     if (!error) return NextResponse.redirect(`${origin}${next}`);
   }
 
-  // El link de recuperación falla si venció o se abrió en otro navegador (falta el
-  // verificador PKCE): lo mandamos a pedir uno nuevo, no al login sin explicación.
-  const failure = next === "/nueva-contrasena" ? "/recuperar?error=link" : "/login?error=oauth";
-  return NextResponse.redirect(`${origin}${failure}`);
+  return NextResponse.redirect(`${origin}/login?error=oauth`);
 }
