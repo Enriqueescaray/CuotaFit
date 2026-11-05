@@ -6,10 +6,10 @@ import { useEffect, useState } from "react";
 import type { Route } from "next";
 import { useGym } from "@/lib/store";
 import { subscriptionBlock } from "@/lib/data";
-import { SUPPORT_PHONE, subscriptionWhatsappUrl } from "@/lib/contact";
 import { useTheme } from "@/lib/theme";
 import Modals from "./Modals";
 import { LogoMark, Wordmark } from "./Logo";
+import { PaymentInfo } from "./PaymentInfo";
 import { amIPlatformAdmin } from "@/app/actions/admin";
 
 const NAV: { href: Route; label: string }[] = [
@@ -71,8 +71,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div style={{ maxWidth: 420, textAlign: "center", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 36 }}>
           <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>{block.title}</div>
           <div style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 20 }}>{block.body}</div>
-          <a href={subscriptionWhatsappUrl(settings.name)} target="_blank" rel="noopener noreferrer" style={{ display: "block", background: "var(--primary)", color: "#fff", borderRadius: 10, padding: 13, fontWeight: 700, fontSize: 15, textDecoration: "none" }}>Escribir por WhatsApp</a>
-          <div style={{ fontSize: 14, color: "var(--text-muted)", margin: "12px 0 20px" }}>{SUPPORT_PHONE}</div>
+          <div style={{ marginBottom: 20 }}>
+            <PaymentInfo gymName={settings.name} />
+          </div>
           <button onClick={doLogout} style={{ background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Cerrar sesión</button>
         </div>
       </div>

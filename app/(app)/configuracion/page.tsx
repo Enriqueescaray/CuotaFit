@@ -2,6 +2,7 @@
 
 import { useGym } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
+import { PaymentInfo } from "@/components/PaymentInfo";
 
 export default function ConfiguracionPage() {
   const { settings, updateSettings } = useGym();
@@ -43,6 +44,11 @@ export default function ConfiguracionPage() {
             <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: theme === "dark" ? 18 : 2, transition: "left 0.15s" }} />
           </div>
         </div>
+      </div>
+
+      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, maxWidth: 520, marginTop: 16 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 14 }}>Tu suscripción a Cuotafit</div>
+        <PaymentInfo gymName={settings.name} />
       </div>
     </>
   );
