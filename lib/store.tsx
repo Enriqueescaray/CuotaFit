@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "./supabase/client";
+import { loginErrorMessage } from "./auth-errors";
 import {
   addMonths,
   DEFAULT_SETTINGS,
@@ -293,7 +294,7 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return { error: error.message };
+      if (error) return { error: loginErrorMessage(error) };
       return {};
     },
     [supabase],

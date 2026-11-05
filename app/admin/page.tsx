@@ -67,7 +67,7 @@ export default function AdminPage() {
     setBusy(true);
     const { error: e } = await login(email, password);
     if (e) {
-      setError("Email o contraseña incorrectos.");
+      setError(e);
       setBusy(false);
       return;
     }

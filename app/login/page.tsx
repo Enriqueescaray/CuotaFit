@@ -20,12 +20,16 @@ export default function LoginPage() {
   // (p.ej. el admin entrando a la cuenta de un gimnasio) sin quedar atrapado en /admin.
 
   async function submit() {
+    if (!email.trim() || !password) {
+      setError("Ingresá tu email y tu contraseña.");
+      return;
+    }
     setError(null);
     setPending(true);
-    const { error } = await login(email, password);
+    const { error } = await login(email.trim(), password);
     if (error) {
       setPending(false);
-      setError("Email o contraseña incorrectos.");
+      setError(error);
       return;
     }
     // Los administradores de la plataforma van a su panel, no al dashboard de un gimnasio.
@@ -66,7 +70,7 @@ export default function LoginPage() {
               <div style={{ fontSize: 13, color: "var(--red)", background: "var(--red-soft)", borderRadius: 8, padding: "8px 12px" }}>{error}</div>
             )}
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <div style={{ fontSize: 13, color: "var(--primary)", fontWeight: 600, cursor: "pointer" }}>¿Olvidaste tu contraseña?</div>
+              <Link href="/recuperar" style={{ fontSize: 13, color: "var(--primary)", fontWeight: 600 }}>¿Olvidaste tu contraseña?</Link>
             </div>
             <button onClick={submit} disabled={pending} style={{ width: "100%", background: "var(--primary)", color: "#fff", border: "none", borderRadius: 10, padding: 13, fontWeight: 700, fontSize: 15, cursor: pending ? "default" : "pointer", opacity: pending ? 0.7 : 1, marginTop: 6 }}>
               {pending ? "Ingresando..." : "Ingresar"}
